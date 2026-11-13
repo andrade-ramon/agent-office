@@ -4,6 +4,8 @@ Um escritório 2D em pixel art, animado e interativo, que mostra **em tempo real
 
 Tudo roda **somente em `127.0.0.1`**. Nada sai da sua máquina.
 
+![O escritório no modo demo](docs/demo.jpg)
+
 ```
 ┌──────────────┐  hooks (POST /events)   ┌───────────────────────┐  WebSocket   ┌──────────────┐
 │ Claude Code  ├────────────────────────►│                       ├─────────────►│  navegador   │
@@ -169,7 +171,7 @@ Comece sempre por `agent-office doctor`.
 `agent-office status` mostra se o servidor está no ar. Log em `~/.agent-office/logs/server.log`. Se a porta 4747 estiver ocupada, use `agent-office connect --port 4800` seguido de `agent-office service install`.
 
 **Vejo "front-end não compilado".**
-Rode `npm run build` e `agent-office restart`.
+Rode `npm run build` e `agent-office restart` (o reinício só é necessário na primeira vez; depois, os novos builds são servidos direto).
 
 **Minhas sessões do Claude aparecem, mas "último hook recebido: nunca".**
 Duas causas comuns:
