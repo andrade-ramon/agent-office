@@ -235,7 +235,6 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   if (webBuilt && opts.webDir) {
     await fastify.register(fastifyStatic, {
       root: opts.webDir,
-      wildcard: false,
       setHeaders(res, path) {
         if (path.endsWith('index.html')) res.header('Cache-Control', 'no-cache');
         else if (/[\\/]assets[\\/]/.test(path)) res.header('Cache-Control', 'public, max-age=31536000, immutable');

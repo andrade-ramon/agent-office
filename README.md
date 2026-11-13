@@ -116,7 +116,7 @@ As duas vias convergem para um schema único e são deduplicadas (pelo id da cha
 }
 ```
 
-Além disso, o servidor lê `~/.claude/sessions/<pid>.json` (um arquivo por processo vivo do Claude Code) para saber quais sessões continuam abertas mesmo paradas há horas e quando o processo saiu.
+Além disso, o servidor lê `~/.claude/sessions/<pid>.json` (um arquivo por processo vivo do Claude Code) para saber quais sessões continuam abertas mesmo paradas há horas, quando o processo saiu e — importante — quando a sessão está **parada esperando você** (por exemplo, num pedido de permissão), mesmo sem hooks.
 
 ### Estados de uma sessão
 
