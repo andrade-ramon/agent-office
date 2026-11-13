@@ -188,6 +188,38 @@ describe('SessionStore', () => {
     expect(store.get('claude:s1')?.context).toEqual({ tokens: 50_000, window: 200_000, pct: 0.25 });
   });
 
+  it('com hooks ativos, ignora a ferramenta-invólucro vista pelo watcher (code mode do Codex)', () => {
+    const cx = (event: EventType, ts: number, extra: Parameters<typeof ev>[2] = {}) =>
+      ev(event, ts, { agent: 'codex', sessionId: 'c1', ...extra });
+    const wrapper = { toolUseId: 'call_w', wrapper: true };
+    // só watcher: o invólucro "exec" vale como ferramenta
+    store.apply(cx('prompt', T0, { source: 'watcher' }));
+    store.apply(cx('tool_start', T0 + 1, { source: 'watcher', tool: ['exec', 'bash'], meta: wrapper }));
+    expect(store.get('codex:c1')).toMatchObject({ status: 'working', toolName: 'exec' });
+    store.apply(cx('tool_end', T0 + 2, { source: 'watcher', tool: ['exec', 'bash'], meta: wrapper }));
+
+    // hooks reportam a ferramenta real; o invólucro passa a ser ignorado
+    store.apply(cx('tool_start', T0 + 10, { source: 'watcher', tool: ['exec', 'bash'], meta: { toolUseId: 'call_w2', wrapper: true } }));
+    store.apply(cx('tool_start', T0 + 11, { source: 'hook', id: 'h1', tool: ['mcp__docs__read_page', 'read'] }));
+    store.apply(cx('tool_end', T0 + 12, { source: 'hook', id: 'h1', tool: ['mcp__docs__read_page', 'read'] }));
+    store.apply(cx('tool_start', T0 + 13, { source: 'hook', id: 'h2', tool: ['Bash', 'bash'] }));
+    store.apply(cx('tool_start', T0 + 14, { source: 'watcher', tool: ['exec', 'bash'], meta: { toolUseId: 'call_w3', wrapper: true } }));
+    store.apply(cx('error', T0 + 15, { source: 'watcher', tool: ['exec', 'bash'], meta: { wrapper: true } }));
+    expect(store.get('codex:c1')).toMatchObject({ status: 'working', toolName: 'Bash' });
+    store.apply(cx('tool_end', T0 + 16, { source: 'hook', id: 'h2', tool: ['Bash', 'bash'] }));
+    // o invólucro aberto antes de os hooks aparecerem foi descartado: nada fica "preso"
+    expect(store.get('codex:c1')).toMatchObject({ status: 'thinking', toolName: null });
+    store.apply(cx('tool_end', T0 + 17, { source: 'watcher', tool: ['exec', 'bash'], meta: { toolUseId: 'call_w2', wrapper: true } }));
+    store.apply(cx('stop', T0 + 20, { source: 'hook' }));
+    expect(store.get('codex:c1')).toMatchObject({ status: 'done', counts: { prompts: 1, tools: 4, errors: 0 } });
+  });
+
+  it('dá nomes distintos às sessões presentes', () => {
+    for (let i = 0; i < 60; i++) store.apply(ev('prompt', T0, { sessionId: `n${i}` }));
+    const labels = store.list().map((s) => s.label);
+    expect(new Set(labels).size).toBe(60);
+  });
+
   it('não cria sessão a partir de um evento de fim nem emite "event" em replay', () => {
     const seen: string[] = [];
     store.on('event', (_k, e) => seen.push(e.event));

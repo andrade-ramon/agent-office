@@ -54,6 +54,12 @@ export interface EventMeta {
   reason?: string;
   contextTokens?: number;
   contextWindow?: number;
+  /**
+   * Ferramenta-invólucro que executa outras ferramentas por dentro (o "exec" do
+   * code mode do Codex). Quando os hooks já reportam as ferramentas reais da
+   * sessão, o invólucro visto pelo watcher é ignorado.
+   */
+  wrapper?: boolean;
 }
 
 export interface NormalizedEvent {

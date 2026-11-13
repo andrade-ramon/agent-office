@@ -312,6 +312,24 @@ describe('CodexRolloutParser', () => {
     expect(p.parse(rec('world_state', {}))).toEqual([]);
   });
 
+  it('marca o invólucro do code mode e encerra sessões de `codex exec` ao fim do turno', () => {
+    const p = new CodexRolloutParser(ID);
+    p.parse(rec('session_meta', { id: ID, cwd: '/repo/api', originator: 'codex_exec', source: 'exec' }));
+    const start = events(p.parse(rec('response_item', { type: 'custom_tool_call', name: 'exec', call_id: 'c1' })));
+    expect(start[0]?.meta).toEqual({ toolUseId: 'c1', wrapper: true });
+    expect(events(p.parse(rec('response_item', { type: 'custom_tool_call_output', call_id: 'c1' })))[0]?.meta).toEqual({
+      toolUseId: 'c1',
+      wrapper: true,
+    });
+    const plain = events(p.parse(rec('response_item', { type: 'function_call', name: 'apply_patch', call_id: 'c2' })));
+    expect(plain[0]?.meta).toEqual({ toolUseId: 'c2' });
+    expect(events(p.parse(rec('event_msg', { type: 'task_complete' }))).map((e) => e.event)).toEqual(['stop', 'session_end']);
+
+    const desktop = new CodexRolloutParser(ID);
+    desktop.parse(rec('session_meta', { id: ID, cwd: '/repo/api', originator: 'Codex Desktop', source: 'vscode' }));
+    expect(events(desktop.parse(rec('event_msg', { type: 'task_complete' }))).map((e) => e.event)).toEqual(['stop']);
+  });
+
   it('liga subagentes à thread-pai', () => {
     const p = new CodexRolloutParser(ID);
     const meta = events(

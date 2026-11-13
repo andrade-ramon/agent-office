@@ -23,10 +23,12 @@ const OUTPUT_TYPES = new Set([
  * O formato não é uma interface estável: tipos desconhecidos são ignorados.
  */
 export class CodexRolloutParser {
-  private readonly tools = new Map<string, { name: string; category: ToolCategory }>();
+  private readonly tools = new Map<string, { name: string; category: ToolCategory; wrapper?: boolean }>();
   private cwd = '';
   private parentSessionId: string | undefined;
   private sawMeta = false;
+  /** `codex exec`: o processo termina junto com o turno. */
+  private oneShot = false;
 
   constructor(private readonly sessionId: string) {}
 
@@ -65,6 +67,7 @@ export class CodexRolloutParser {
         const meta: EventMeta = {};
         const originator = str(payload.originator);
         if (originator) meta.entrypoint = originator;
+        this.oneShot = originator === 'codex_exec' || str(payload.source) === 'exec';
         const nickname = str(payload.agent_nickname) ?? (spawn ? str(spawn.agent_nickname) : undefined);
         if (nickname) meta.nickname = nickname;
         const role = str(payload.agent_role) ?? (spawn ? str(spawn.agent_role) : undefined);
@@ -89,9 +92,15 @@ export class CodexRolloutParser {
             return [make('prompt', {}, window ? { contextWindow: window } : undefined)];
           }
           case 'task_complete':
-            return [make('stop')];
-          case 'turn_aborted':
-            return [make('stop', {}, { reason: str(payload.reason) ?? 'aborted' })];
+            return this.oneShot && !this.parentSessionId
+              ? [make('stop'), { ...make('session_end', {}, { reason: 'exec_finished' }), ts: ts + 1 }]
+              : [make('stop')];
+          case 'turn_aborted': {
+            const stop = make('stop', {}, { reason: str(payload.reason) ?? 'aborted' });
+            return this.oneShot && !this.parentSessionId
+              ? [stop, { ...make('session_end', {}, { reason: 'exec_aborted' }), ts: ts + 1 }]
+              : [stop];
+          }
           case 'token_count': {
             const info = isObj(payload.info) ? payload.info : undefined;
             const last = info && isObj(info.last_token_usage) ? info.last_token_usage : undefined;
@@ -111,7 +120,7 @@ export class CodexRolloutParser {
           case 'item_completed': {
             const item = isObj(payload.item) ? payload.item : undefined;
             if (item && item.type === 'CommandExecution' && item.status === 'failed') {
-              return [make('error', { toolCategory: 'bash', toolName: 'exec' })];
+              return [make('error', { toolCategory: 'bash', toolName: 'exec' }, { wrapper: true })];
             }
             return [];
           }
@@ -141,15 +150,26 @@ export class CodexRolloutParser {
           const name = str(payload.name) ?? (kind === 'local_shell_call' ? 'local_shell' : kind.replace(/_call$/, ''));
           const id = str(payload.call_id) ?? str(payload.id);
           const category = categorizeTool('codex', name);
-          if (id) this.tools.set(id, { name, category });
-          return [make('tool_start', { toolName: name, toolCategory: category }, id ? { toolUseId: id } : undefined)];
+          const wrapper = kind === 'custom_tool_call' && name === 'exec';
+          if (id) this.tools.set(id, { name, category, wrapper });
+          return [
+            make('tool_start', { toolName: name, toolCategory: category }, {
+              ...(id ? { toolUseId: id } : {}),
+              ...(wrapper ? { wrapper: true } : {}),
+            }),
+          ];
         }
         if (OUTPUT_TYPES.has(kind)) {
           const id = str(payload.call_id) ?? str(payload.id);
           const known = id ? this.tools.get(id) : undefined;
           if (id) this.tools.delete(id);
           const extra: Partial<NormalizedEvent> = known ? { toolName: known.name, toolCategory: known.category } : {};
-          return [make('tool_end', extra, id ? { toolUseId: id } : undefined)];
+          return [
+            make('tool_end', extra, {
+              ...(id ? { toolUseId: id } : {}),
+              ...(known?.wrapper ? { wrapper: true } : {}),
+            }),
+          ];
         }
         return [];
       }

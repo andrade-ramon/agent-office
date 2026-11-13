@@ -52,6 +52,7 @@ interface OpenTool {
   name?: string;
   category: ToolCategory;
   ts: number;
+  wrapper?: boolean;
 }
 
 interface Internal {
@@ -62,6 +63,8 @@ interface Internal {
   lastByType: Map<string, { ts: number; source: EventSource }>;
   lastStateTs: number;
   anon: number;
+  /** A sessão já reportou ferramentas por hook (mais precisas que o invólucro do watcher). */
+  hookTools: boolean;
 }
 
 export interface ApplyOptions {
@@ -130,6 +133,16 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
     const s = it.state;
     this.mergeFromEvent(it, ev);
 
+    if (ev.source === 'hook' && ev.event === 'tool_start' && !it.hookTools) {
+      it.hookTools = true;
+      for (const [k, t] of it.openTools) if (t.wrapper) it.openTools.delete(k);
+    }
+    if (it.hookTools && ev.source !== 'hook' && ev.meta?.wrapper) {
+      // Os hooks já mostram as ferramentas reais; o invólucro só duplicaria.
+      this.markDirty(key);
+      return false;
+    }
+
     if (this.isDuplicate(it, ev)) {
       this.markDirty(key);
       return false;
@@ -168,7 +181,12 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
         case 'tool_start': {
           const alreadyEnded = id ? it.seenEnd.has(id) : false;
           if (!alreadyEnded) {
-            it.openTools.set(id ?? `anon-${++it.anon}`, { name: ev.toolName, category: ev.toolCategory, ts: ev.ts });
+            it.openTools.set(id ?? `anon-${++it.anon}`, {
+              name: ev.toolName,
+              category: ev.toolCategory,
+              ts: ev.ts,
+              ...(ev.meta?.wrapper ? { wrapper: true } : {}),
+            });
           }
           this.refreshWorking(it, ev.ts);
           break;
@@ -319,7 +337,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
       key,
       agent: ev.agent,
       sessionId: ev.sessionId,
-      label: child ? 'Subagente' : NAMES[hashString(key) % NAMES.length]!,
+      label: child ? 'Subagente' : this.pickName(key),
       cwd: ev.cwd,
       project: ev.project || projectFromCwd(ev.cwd),
       status: child ? 'thinking' : 'starting',
@@ -341,9 +359,25 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
       lastByType: new Map(),
       lastStateTs: 0,
       anon: 0,
+      hookTools: false,
     };
     this.sessions.set(key, it);
     return it;
+  }
+
+  /** Nome estável por sessão, evitando repetir nomes já em uso no escritório. */
+  private pickName(key: string): string {
+    const used = new Set<string>();
+    for (const it of this.sessions.values()) used.add(it.state.label);
+    const start = hashString(key) % NAMES.length;
+    for (let i = 0; i < NAMES.length; i++) {
+      const name = NAMES[(start + i) % NAMES.length]!;
+      if (!used.has(name)) return name;
+    }
+    for (let n = 2; ; n++) {
+      const name = `${NAMES[start]!} ${n}`;
+      if (!used.has(name)) return name;
+    }
   }
 
   private mergeFromEvent(it: Internal, ev: NormalizedEvent): void {
@@ -358,7 +392,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
     if (ev.parentSessionId && !s.parentKey) {
       s.parentSessionId = ev.parentSessionId;
       s.parentKey = sessionKey(ev.agent, ev.parentSessionId);
-      if (s.label === NAMES[hashString(s.key) % NAMES.length]) s.label = 'Subagente';
+      if (NAMES.includes(s.label.replace(/ \d+$/, ''))) s.label = 'Subagente';
       this.markDirty(s.parentKey);
     }
     if (ev.source === 'hook') s.sources.hook = true;
@@ -424,14 +458,14 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
       it.openTools.delete(id);
       return;
     }
-    // Sem id: fecha a mais recente com o mesmo nome (ou a mais recente).
+    // Sem id: fecha a mais recente com o mesmo nome; sem nome, a mais recente.
     let match: string | undefined;
-    let fallback: string | undefined;
+    let latest: string | undefined;
     for (const [k, t] of it.openTools) {
-      fallback = k;
+      latest = k;
       if (ev.toolName && t.name === ev.toolName) match = k;
     }
-    const target = match ?? fallback;
+    const target = ev.toolName ? match : latest;
     if (target) it.openTools.delete(target);
   }
 

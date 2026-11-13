@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sessionKey, type NormalizedEvent } from './schema.js';
@@ -108,6 +109,16 @@ export class ClaudeProcessWatcher {
       if (seen.has(file)) continue;
       this.entries.delete(file);
       this.store.end(sessionKey('claude', entry.sessionId), now, 'process_exit', { replay });
+    }
+
+    if (this.first && existsSync(this.dir)) {
+      // Na partida: sessões reconstruídas dos transcripts cujo processo já não
+      // existe (ex.: `claude -p` que terminou) não devem voltar como "ociosas".
+      for (const s of this.store.list()) {
+        if (s.agent === 'claude' && !s.parentKey && !s.alive && s.status !== 'ended') {
+          this.store.end(s.key, s.lastActivityAt + 1, 'no_process', { replay: true });
+        }
+      }
     }
   }
 
