@@ -1,0 +1,36 @@
+{
+  "name": "agent-office",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Escritório 2D animado que mostra em tempo real as sessões e subagentes do Claude Code e do Codex rodando na sua máquina.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "workspaces": [
+    "packages/server",
+    "packages/hooks",
+    "packages/web"
+  ],
+  "scripts": {
+    "build": "npm run build -w @agent-office/server && npm run build -w @agent-office/hooks && npm run build -w @agent-office/web",
+    "start": "node packages/hooks/dist/cli.js start",
+    "predemo": "npm run build",
+    "demo": "node packages/server/dist/index.js --demo --open",
+    "dev:web": "npm run dev -w @agent-office/web",
+    "agent-office": "node packages/hooks/dist/cli.js",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && npm run typecheck -w @agent-office/web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
+    "typescript": "~5.9",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^5.1.0"
+  }
+}

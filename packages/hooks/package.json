@@ -1,0 +1,13 @@
+{
+  "name": "@agent-office/hooks",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "agent-office": "dist/cli.js"
+  },
+  "files": ["dist", "hook"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}
