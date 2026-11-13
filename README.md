@@ -24,7 +24,7 @@ Tudo roda **somente em `127.0.0.1`**. Nada sai da sua máquina.
 ## Instalação
 
 ```bash
-git clone git@github.com:andrade-ramon/agent-office.git ~/github/agent-office
+git clone https://github.com/andrade-ramon/agent-office.git ~/github/agent-office
 cd ~/github/agent-office
 npm install
 npm run build
