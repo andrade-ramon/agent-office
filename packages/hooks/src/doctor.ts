@@ -10,6 +10,7 @@ import {
   findCodex,
   installedCount,
   parseVersion,
+  readClaudeSettingsProblems,
 } from './install.js';
 import { HOST, resolvePort, type Paths } from './paths.js';
 import { canConnect, getHealth, httpGet } from './server-control.js';
@@ -231,6 +232,22 @@ export async function runDoctor(paths: Paths): Promise<Check[]> {
         ? ok('Hooks do Claude Code', `${claudeInstalled}/${claudeEvents.length} eventos em ${paths.claudeSettings}`)
         : fail('Hooks do Claude Code', `${claudeInstalled}/${claudeEvents.length} eventos instalados`, 'rode "agent-office connect"'),
     );
+    const problems = readClaudeSettingsProblems(paths.claudeSettings);
+    if (problems.length > 0) {
+      checks.push(
+        warn(
+          'settings.json do Claude Code',
+          `o Claude Code está ignorando o arquivo inteiro: ${problems.map((p) => p.message).join('; ')}`,
+          'problema anterior ao agent-office. Enquanto não for corrigido, nenhum hook (nem suas permissões) vale — o watcher de transcripts cobre as sessões. Para corrigir: "agent-office fix-settings".',
+        ),
+      );
+    } else if (claudeInstalled === claudeEvents.length) {
+      checks.push(
+        health && health.lastHookAt.claude
+          ? ok('Eventos de hook do Claude', `último recebido às ${new Date(health.lastHookAt.claude).toLocaleTimeString()}`)
+          : warn('Eventos de hook do Claude', 'nenhum recebido ainda', 'abra uma sessão nova do Claude Code; sessões já abertas continuam pelo watcher'),
+      );
+    }
     checks.push(
       existsSync(join(paths.claudeHome, 'projects'))
         ? ok('Transcripts do Claude', join(paths.claudeHome, 'projects'))

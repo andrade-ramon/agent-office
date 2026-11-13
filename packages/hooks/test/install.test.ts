@@ -11,8 +11,10 @@ import {
   claudeHandlers,
   codexHandlers,
   codexTrust,
+  claudeSettingsProblems,
   connectTarget,
   disconnectTarget,
+  fixClaudeSettings,
   hookCommand,
   installHookFiles,
   installedCount,
@@ -138,6 +140,33 @@ describe('connect / disconnect no settings.json do Claude Code', () => {
     const r = connect();
     expect(r.status).toBe('error');
     expect(readFileSync(paths.claudeSettings, 'utf8')).toBe('{ "model": ');
+  });
+});
+
+describe('settings.json que o Claude Code ignora', () => {
+  it('detecta statusLine sem "type" e corrige preservando o resto', () => {
+    expect(claudeSettingsProblems({ statusLine: { type: 'command', command: 'x' } })).toEqual([]);
+    expect(claudeSettingsProblems({ model: 'opus' })).toEqual([]);
+    expect(claudeSettingsProblems({ statusLine: { command: 'x' } })).toEqual([
+      { key: 'statusLine.type', message: 'statusLine sem "type": "command"', fixable: true },
+    ]);
+
+    writeFileSync(paths.claudeSettings, '{\n  "model": "opus",\n  "statusLine": {\n    "command": "node status.js",\n    "padding": 0\n  },\n  "theme": "dark"\n}\n');
+    const r = fixClaudeSettings(paths);
+    expect(r.status).toBe('fixed');
+    expect(r.backup && existsSync(r.backup)).toBe(true);
+    expect(readFileSync(paths.claudeSettings, 'utf8')).toBe(
+      '{\n  "model": "opus",\n  "statusLine": {\n    "type": "command",\n    "command": "node status.js",\n    "padding": 0\n  },\n  "theme": "dark"\n}\n',
+    );
+    expect(fixClaudeSettings(paths).status).toBe('nothing');
+  });
+
+  it('depois da correção, disconnect remove só os hooks e mantém a correção', () => {
+    writeFileSync(paths.claudeSettings, '{\n  "statusLine": {\n    "command": "x"\n  }\n}\n');
+    connectTarget(paths, 'claude', paths.claudeSettings, claudeHandlers(paths.hookLauncher));
+    fixClaudeSettings(paths);
+    expect(disconnectTarget(paths, 'claude', paths.claudeSettings).status).toBe('removed');
+    expect(JSON.parse(readFileSync(paths.claudeSettings, 'utf8'))).toEqual({ statusLine: { type: 'command', command: 'x' } });
   });
 });
 

@@ -12,6 +12,12 @@ import { isObj, str } from './util.js';
 const TAIL_BYTES = 512 * 1024;
 const CHUNK_BYTES = 256 * 1024;
 const MAX_LINE_CHARS = 16 * 1024 * 1024;
+/** Releituras após cada mudança: eventos de arquivo muito próximos podem ser aglutinados. */
+const TRAILING_MS = [300, 2000];
+/** Varredura periódica dos arquivos ativos (rede de segurança contra eventos perdidos). */
+const SWEEP_MS = 15_000;
+/** Arquivo sem mudanças por este tempo deixa de ser varrido. */
+const DORMANT_AFTER_MS = 2 * 60 * 60 * 1000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface LineParser {
@@ -30,6 +36,8 @@ interface Tracked {
   skipFirst: boolean;
   /** Linha grande demais: ignora até o próximo \n. */
   overflow: boolean;
+  /** Última vez em que o arquivo cresceu. */
+  lastGrowth: number;
   queue: Promise<void>;
 }
 
@@ -56,6 +64,8 @@ export class TranscriptWatcher {
   private readonly tracked = new Map<string, Tracked>();
   /** Arquivos antigos conhecidos: só guardamos o tamanho para seguir depois. */
   private readonly dormant = new Map<string, number>();
+  private readonly trailing = new Map<string, NodeJS.Timeout[]>();
+  private sweepTimer: NodeJS.Timeout | null = null;
   private ready = false;
   private counts = { claude: 0, codex: 0 };
 
@@ -74,9 +84,15 @@ export class TranscriptWatcher {
     await Promise.all(pending);
     await Promise.all(startup);
     this.ready = true;
+    this.sweepTimer = setInterval(() => this.sweep(), SWEEP_MS);
+    this.sweepTimer.unref?.();
   }
 
   async stop(): Promise<void> {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    this.sweepTimer = null;
+    for (const timers of this.trailing.values()) for (const h of timers) clearTimeout(h);
+    this.trailing.clear();
     await Promise.all(this.watchers.map((w) => w.close().catch(() => undefined)));
     this.watchers.length = 0;
     await Promise.all([...this.tracked.values()].map((t) => t.queue.catch(() => undefined)));
@@ -180,11 +196,36 @@ export class TranscriptWatcher {
       partial: '',
       skipFirst: false,
       overflow: false,
+      lastGrowth: Date.now(),
       queue: Promise.resolve(),
     };
     this.tracked.set(path, t);
     this.dormant.delete(path);
     return t;
+  }
+
+  /** Relê o arquivo pouco depois de uma mudança, para não perder a última escrita. */
+  private scheduleTrailing(t: Tracked): void {
+    for (const h of this.trailing.get(t.path) ?? []) clearTimeout(h);
+    const timers = TRAILING_MS.map((ms) => {
+      const h = setTimeout(() => void this.enqueue(t, () => this.drain(t, false)), ms);
+      h.unref?.();
+      return h;
+    });
+    this.trailing.set(t.path, timers);
+  }
+
+  private sweep(): void {
+    const now = Date.now();
+    for (const t of [...this.tracked.values()]) {
+      if (now - t.lastGrowth > DORMANT_AFTER_MS) {
+        this.tracked.delete(t.path);
+        this.trailing.delete(t.path);
+        this.dormant.set(t.path, t.offset);
+        continue;
+      }
+      void this.enqueue(t, () => this.drain(t, false));
+    }
   }
 
   private enqueue(t: Tracked, job: () => Promise<void>): Promise<void> {
@@ -204,6 +245,7 @@ export class TranscriptWatcher {
       // Arquivo novo: sessão nova, lê desde o início.
       const t = this.track(agent, path, id.key, id.make(true), 0);
       await this.enqueue(t, () => this.drain(t, false));
+      this.scheduleTrailing(t);
       if (id.subagentId) await this.readSubagentMeta(path, id.subagentId);
       return;
     }
@@ -244,10 +286,13 @@ export class TranscriptWatcher {
     }
     const target = t;
     void this.enqueue(target, () => this.drain(target, false));
+    this.scheduleTrailing(target);
   }
 
   private onUnlink(path: string): void {
     this.dormant.delete(path);
+    for (const h of this.trailing.get(path) ?? []) clearTimeout(h);
+    this.trailing.delete(path);
     const t = this.tracked.get(path);
     if (!t) return;
     this.tracked.delete(path);
@@ -302,6 +347,7 @@ export class TranscriptWatcher {
         const { bytesRead } = await fh.read(buf, 0, want, t.offset);
         if (bytesRead <= 0) break;
         t.offset += bytesRead;
+        t.lastGrowth = Date.now();
         this.consume(t, decoder.write(buf.subarray(0, bytesRead)), replay);
       }
     } catch {

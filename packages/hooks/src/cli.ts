@@ -9,11 +9,13 @@ import {
   codexTrust,
   connectTarget,
   disconnectTarget,
+  fixClaudeSettings,
   findClaude,
   findCodex,
   installHookFiles,
   installedCount,
   parseVersion,
+  readClaudeSettingsProblems,
   removeHookFiles,
   type ConnectResult,
   type DisconnectResult,
@@ -70,6 +72,8 @@ Uso: agent-office <comando> [opções]
   open         abre a interface no navegador
   service      inicialização automática: install | uninstall | status | restart
   doctor       diagnóstico completo
+  fix-settings corrige problemas conhecidos do ~/.claude/settings.json que fazem
+               o Claude Code ignorar o arquivo (ex.: statusLine sem "type")
   uninstall    disconnect + remove o serviço   (--purge apaga ~/.agent-office)
 `;
 
@@ -129,6 +133,16 @@ async function cmdConnect(paths: Paths, args: string[]): Promise<number> {
       const r = connectTarget(paths, 'claude', paths.claudeSettings, claudeHandlers(paths.hookLauncher));
       reportConnect(r);
       failed ||= r.status === 'error';
+      const problems = readClaudeSettingsProblems(paths.claudeSettings);
+      if (problems.length > 0) {
+        console.log(
+          yellow('      atenção: ') +
+            `o Claude Code está ignorando este settings.json inteiro (${problems.map((p) => p.message).join('; ')}).\n` +
+            '      Isso já acontecia antes do agent-office e vale para todos os seus hooks e permissões.\n' +
+            '      Para corrigir (com backup): agent-office fix-settings\n' +
+            dim('      Enquanto isso, o watcher de ~/.claude/projects mostra as sessões do Claude.'),
+        );
+      }
     }
   }
 
@@ -415,6 +429,15 @@ async function main(): Promise<number> {
       return cmdService(paths, args);
     case 'doctor':
       return cmdDoctor(paths);
+    case 'fix-settings': {
+      const r = fixClaudeSettings(paths);
+      line(r.status === 'error' ? 'fail' : 'ok', r.status === 'fixed' ? 'settings.json corrigido' : 'settings.json', r.detail);
+      if (r.backup) console.log(dim(`      backup: ${r.backup}`));
+      if (r.status === 'fixed') {
+        console.log(dim('      O arquivo volta a valer para sessões novas do Claude Code (hooks, permissões e demais ajustes).'));
+      }
+      return r.status === 'error' ? 1 : 0;
+    }
     case 'uninstall':
       return cmdUninstall(paths, args);
     case undefined:

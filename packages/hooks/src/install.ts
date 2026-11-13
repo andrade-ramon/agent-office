@@ -486,3 +486,58 @@ export function codexTrust(paths: Paths, events: string[]): { trusted: number; t
   }
   return { trusted: trusted.size, total };
 }
+
+// ───────────────────────── saúde do settings.json do Claude ─────────────────────────
+
+export interface SettingsProblem {
+  key: string;
+  message: string;
+  fixable: boolean;
+}
+
+/**
+ * O Claude Code ignora o settings.json INTEIRO (hooks e permissões incluídos)
+ * quando alguma chave falha na validação. Detectamos aqui os casos conhecidos.
+ */
+export function claudeSettingsProblems(config: unknown): SettingsProblem[] {
+  const problems: SettingsProblem[] = [];
+  if (isObject(config) && isObject(config.statusLine) && config.statusLine.type !== 'command') {
+    problems.push({
+      key: 'statusLine.type',
+      message: 'statusLine sem "type": "command"',
+      fixable: typeof config.statusLine.command === 'string',
+    });
+  }
+  return problems;
+}
+
+export function readClaudeSettingsProblems(file: string): SettingsProblem[] {
+  try {
+    return claudeSettingsProblems(JSON.parse(readFileSync(file, 'utf8')));
+  } catch {
+    return [];
+  }
+}
+
+/** Corrige os problemas conhecidos do settings.json (com backup). */
+export function fixClaudeSettings(paths: Paths): { status: 'fixed' | 'nothing' | 'error'; detail: string; backup?: string } {
+  const file = paths.claudeSettings;
+  try {
+    if (!existsSync(file)) return { status: 'nothing', detail: 'settings.json não existe' };
+    const text = readFileSync(file, 'utf8');
+    const config = parseConfig(text, file);
+    const fixable = claudeSettingsProblems(config).filter((p) => p.fixable);
+    if (fixable.length === 0) return { status: 'nothing', detail: 'nenhum problema conhecido encontrado' };
+    const next: JsonObject = { ...config };
+    if (isObject(next.statusLine)) {
+      // "type" primeiro, demais chaves na ordem original.
+      const rest = Object.fromEntries(Object.entries(next.statusLine).filter(([k]) => k !== 'type'));
+      next.statusLine = { type: 'command', ...rest };
+    }
+    const backupPath = backup(paths, 'claude', file);
+    writeAtomic(file, serialize(next, text));
+    return { status: 'fixed', detail: fixable.map((p) => p.key).join(', '), backup: backupPath };
+  } catch (err) {
+    return { status: 'error', detail: (err as Error).message };
+  }
+}
