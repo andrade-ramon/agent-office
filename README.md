@@ -4,7 +4,7 @@ Um escritório 2D em pixel art, animado e interativo, que mostra **em tempo real
 
 Tudo roda **somente em `127.0.0.1`**. Nada sai da sua máquina.
 
-![O escritório no modo demo](docs/demo.jpg)
+![O escritório no modo demo, com a legenda dos espaços e o painel de detalhes de um agente](docs/demo.gif)
 
 ```
 ┌──────────────┐  hooks (POST /events)   ┌───────────────────────┐  WebSocket   ┌──────────────┐
