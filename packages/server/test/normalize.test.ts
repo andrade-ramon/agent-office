@@ -82,6 +82,14 @@ describe('normalizeHook (Claude Code)', () => {
     });
   });
 
+  it('usa o título da sessão como assunto (só na sessão principal)', () => {
+    expect(hook({ hook_event_name: 'UserPromptSubmit', session_title: 'Corrigir frete no checkout' })[0]?.meta).toMatchObject({
+      title: 'Corrigir frete no checkout',
+    });
+    const sub = hook({ hook_event_name: 'PreToolUse', tool_name: 'Grep', agent_id: 'a1', session_title: 'Corrigir frete' })[0];
+    expect(sub?.meta?.title).toBeUndefined();
+  });
+
   it('ignora SessionStart de compactação', () => {
     expect(hook({ hook_event_name: 'SessionStart', source: 'compact' })).toEqual([]);
   });
@@ -235,6 +243,15 @@ describe('ClaudeTranscriptParser', () => {
     expect(end.map((e) => e.event)).toEqual(['stop']);
   });
 
+  it('lê o título da sessão das linhas custom-title', () => {
+    const p = new ClaudeTranscriptParser({ sessionId: 'abc' });
+    expect(p.parse({ type: 'custom-title', customTitle: 'Agent Office 2D dashboard', sessionId: 'abc' })).toMatchObject([
+      { kind: 'meta', agent: 'claude', sessionId: 'abc', meta: { title: 'Agent Office 2D dashboard' } },
+    ]);
+    const sub = new ClaudeTranscriptParser({ sessionId: 'abc', agentId: 'x1' });
+    expect(sub.parse({ type: 'custom-title', customTitle: 'do pai' })).toEqual([]);
+  });
+
   it('trata erro de ferramenta, interrupção e linhas irrelevantes', () => {
     const p = new ClaudeTranscriptParser({ sessionId: 'abc' });
     const err = events(
@@ -338,11 +355,16 @@ describe('CodexRolloutParser', () => {
           id: ID,
           cwd: '/repo/api',
           agent_nickname: 'Laplace',
+          agent_path: '/root/implement_app_p0p1',
           source: { subagent: { thread_spawn: { parent_thread_id: 'parent-1', depth: 1 } } },
         }),
       ),
     );
-    expect(meta[0]).toMatchObject({ event: 'subagent_start', parentSessionId: 'parent-1', meta: { nickname: 'Laplace' } });
+    expect(meta[0]).toMatchObject({
+      event: 'subagent_start',
+      parentSessionId: 'parent-1',
+      meta: { nickname: 'Laplace', title: 'implement app p0p1' },
+    });
     expect(events(p.parse(rec('event_msg', { type: 'task_started' })))[0]).toMatchObject({ parentSessionId: 'parent-1' });
   });
 });

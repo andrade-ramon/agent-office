@@ -48,6 +48,12 @@ export class ClaudeTranscriptParser {
   parse(line: unknown): Ingest[] {
     if (!isObj(line)) return [];
     const type = str(line.type);
+    if (type === 'custom-title' || type === 'ai-title') {
+      // Título que o Claude Code dá à sessão (o mesmo da barra lateral do app).
+      const title = str(line.customTitle) ?? str(line.aiTitle) ?? str(line.title);
+      if (!title || this.info.agentId) return [];
+      return [{ kind: 'meta', agent: 'claude', sessionId: this.info.sessionId, ts: parseTs(line.timestamp, Date.now()), meta: { title } }];
+    }
     if (type !== 'user' && type !== 'assistant') return [];
     const message = isObj(line.message) ? line.message : undefined;
     if (!message) return [];

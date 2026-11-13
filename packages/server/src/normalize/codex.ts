@@ -1,5 +1,5 @@
 import type { EventMeta, EventType, Ingest, NormalizedEvent, ToolCategory } from '../schema.js';
-import { isObj, num, parseTs, projectFromCwd, str } from '../util.js';
+import { humanizeSlug, isObj, num, parseTs, projectFromCwd, str } from '../util.js';
 import { categorizeTool } from './tools.js';
 
 const ROLLOUT_RE = /rollout-.*?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})[^/\\]*\.jsonl$/i;
@@ -72,6 +72,11 @@ export class CodexRolloutParser {
         if (nickname) meta.nickname = nickname;
         const role = str(payload.agent_role) ?? (spawn ? str(spawn.agent_role) : undefined);
         if (role) meta.agentType = role;
+        // Subagentes do Codex trazem a tarefa no caminho do agente (/root/implement_app → "implement app").
+        const task = this.parentSessionId
+          ? humanizeSlug(str(payload.agent_path) ?? (spawn ? str(spawn.agent_path) : undefined))
+          : undefined;
+        if (task) meta.title = task;
         const started = parseTs(payload.timestamp, ts);
         return [{ ...make(this.parentSessionId ? 'subagent_start' : 'session_start', {}, meta), ts: started }];
       }

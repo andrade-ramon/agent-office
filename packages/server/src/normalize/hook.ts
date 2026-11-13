@@ -49,6 +49,9 @@ export function normalizeHook(env: HookEnvelope, now: number = Date.now()): Inge
   const model = str(p.model);
   if (model) meta.model = model;
   if (agentType) meta.agentType = agentType;
+  // Título da sessão (Claude Code envia em SessionStart/UserPromptSubmit); não vale para subagentes.
+  const title = str(p.session_title);
+  if (title && !inSubagent) meta.title = title;
 
   const make = (event: EventType, extra: Partial<NormalizedEvent> = {}, extraMeta: EventMeta = {}): NormalizedEvent => {
     const merged = { ...meta, ...extraMeta };

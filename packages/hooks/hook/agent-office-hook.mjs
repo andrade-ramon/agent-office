@@ -43,6 +43,8 @@ const ALLOW = [
   'model',
   'permission_mode',
   'is_interrupt',
+  // Título curto que o próprio agente dá à sessão (o "assunto" mostrado no escritório).
+  'session_title',
 ];
 
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'fish', 'ksh', 'tcsh', 'csh']);

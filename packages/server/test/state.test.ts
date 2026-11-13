@@ -218,6 +218,18 @@ describe('SessionStore', () => {
     expect(store.get('codex:c1')).toMatchObject({ status: 'done', counts: { prompts: 1, tools: 4, errors: 0 } });
   });
 
+  it('guarda o assunto da sessão, limpo e limitado; pode ser desligado', () => {
+    store.apply(ev('prompt', T0, { meta: { title: '  Corrigir   frete\nno checkout ' } }));
+    expect(store.get('claude:s1')?.title).toBe('Corrigir frete no checkout');
+    store.apply({ kind: 'meta', agent: 'claude', sessionId: 's1', ts: T0, meta: { title: 'x'.repeat(300) } });
+    expect(store.get('claude:s1')?.title).toHaveLength(90);
+
+    const strict = new SessionStore({ titles: false });
+    strict.apply(ev('prompt', T0, { meta: { title: 'segredo' } }));
+    expect(strict.get('claude:s1')?.title).toBeUndefined();
+    strict.dispose();
+  });
+
   it('dá nomes distintos às sessões presentes', () => {
     for (let i = 0; i < 60; i++) store.apply(ev('prompt', T0, { sessionId: `n${i}` }));
     const labels = store.list().map((s) => s.label);

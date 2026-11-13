@@ -16,6 +16,8 @@ interface ProcEntry {
   status?: string;
   /** Presente quando status = "waiting" (ex.: "permission prompt"). */
   waitingFor?: string;
+  /** Título da sessão (o mesmo da barra lateral do app). */
+  name?: string;
   statusUpdatedAt: number;
 }
 
@@ -174,7 +176,12 @@ export class ClaudeProcessWatcher {
       sessionId: entry.sessionId,
       ts: now,
       cwd: entry.cwd,
-      meta: { alive: true, pid: entry.pid, ...(entry.entrypoint ? { entrypoint: entry.entrypoint } : {}) },
+      meta: {
+        alive: true,
+        pid: entry.pid,
+        ...(entry.entrypoint ? { entrypoint: entry.entrypoint } : {}),
+        ...(entry.name ? { title: entry.name } : {}),
+      },
     });
   }
 }
@@ -191,6 +198,7 @@ function parseEntry(file: string, mtimeMs: number, raw: unknown): ProcEntry | nu
   const entrypoint = str(raw.entrypoint);
   const status = str(raw.status);
   const waitingFor = str(raw.waitingFor);
+  const name = str(raw.name);
   return {
     file,
     mtimeMs,
@@ -201,6 +209,7 @@ function parseEntry(file: string, mtimeMs: number, raw: unknown): ProcEntry | nu
     ...(entrypoint ? { entrypoint } : {}),
     ...(status ? { status } : {}),
     ...(waitingFor ? { waitingFor } : {}),
+    ...(name ? { name } : {}),
     statusUpdatedAt: num(raw.statusUpdatedAt) ?? num(raw.updatedAt) ?? 0,
   };
 }

@@ -99,10 +99,12 @@ const app = await createApp({
           claudeDir: join(claudeHome, 'projects'),
           codexDir: join(codexHome, 'sessions'),
           claudeSessionsDir: join(claudeHome, 'sessions'),
+          codexIndexFile: join(codexHome, 'session_index.jsonl'),
         },
   store: {
     idleAfterMs: config.idleAfterMin * 60_000,
     endAfterMs: config.endAfterMin * 60_000,
+    titles: config.titles,
   },
   log,
 });

@@ -6,6 +6,7 @@ import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { WebSocket, WebSocketServer } from 'ws';
 import { ClaudeProcessWatcher } from './claude-procs.js';
+import { CodexTitleWatcher } from './codex-titles.js';
 import { HOST } from './config.js';
 import { HistoryDb } from './db.js';
 import { DemoSimulator } from './demo.js';
@@ -39,6 +40,8 @@ export interface AppOptions {
         claudeDir: string | false;
         codexDir: string | false;
         claudeSessionsDir: string | false;
+        /** `~/.codex/session_index.jsonl` (nomes das threads do Codex). */
+        codexIndexFile?: string | false;
         usePolling?: boolean;
       };
   store?: Partial<StoreOptions>;
@@ -287,6 +290,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   // ─────────── fontes ───────────
   let watcher: TranscriptWatcher | null = null;
   let procs: ClaudeProcessWatcher | null = null;
+  let codexTitles: CodexTitleWatcher | null = null;
   let demo: DemoSimulator | null = null;
   const timers: NodeJS.Timeout[] = [];
 
@@ -307,6 +311,10 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       if (opts.watch.claudeSessionsDir) {
         procs = new ClaudeProcessWatcher(opts.watch.claudeSessionsDir, store);
         await procs.start();
+      }
+      if (opts.watch.codexIndexFile && store.options.titles) {
+        codexTitles = new CodexTitleWatcher(opts.watch.codexIndexFile, store);
+        await codexTitles.start();
       }
       store.tick();
     }
@@ -358,6 +366,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       for (const t of timers) clearInterval(t);
       demo?.stop();
       procs?.stop();
+      codexTitles?.stop();
       await watcher?.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

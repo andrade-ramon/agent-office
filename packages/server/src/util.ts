@@ -36,6 +36,21 @@ export function projectFromCwd(cwd: string | undefined): string {
   return lastSegment(norm) || '/';
 }
 
+/** Normaliza um título curto: uma linha, sem espaços repetidos, tamanho limitado. */
+export function cleanTitle(v: unknown, max = 90): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const text = v.replace(/\s+/g, ' ').trim();
+  if (!text) return undefined;
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+/** `implement_app_p0p1` → `implement app p0p1` */
+export function humanizeSlug(v: string | undefined): string | undefined {
+  if (!v) return undefined;
+  const last = v.split('/').filter(Boolean).pop();
+  return last ? cleanTitle(last.replace(/[_-]+/g, ' ')) : undefined;
+}
+
 /** FNV-1a de 32 bits: hash estável para escolher nomes/cores. */
 export function hashString(s: string): number {
   let h = 0x811c9dc5;

@@ -12,12 +12,15 @@ export interface OfficeConfig {
   idleAfterMin: number;
   /** Minutos sem eventos até a sessão ser considerada encerrada. */
   endAfterMin: number;
+  /** Mostra o assunto (título) das sessões. `false` mantém metadados estritos. */
+  titles: boolean;
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {
   port: DEFAULT_PORT,
   idleAfterMin: 5,
   endAfterMin: 30,
+  titles: true,
 };
 
 /** Diretório de dados do agent-office (`~/.agent-office`). */
@@ -43,5 +46,6 @@ export function loadConfig(home: string = officeHome()): OfficeConfig {
     port: positive(process.env.AGENT_OFFICE_PORT) ?? positive(file.port) ?? DEFAULT_CONFIG.port,
     idleAfterMin: positive(process.env.AGENT_OFFICE_IDLE_MIN) ?? positive(file.idleAfterMin) ?? DEFAULT_CONFIG.idleAfterMin,
     endAfterMin: positive(process.env.AGENT_OFFICE_END_MIN) ?? positive(file.endAfterMin) ?? DEFAULT_CONFIG.endAfterMin,
+    titles: process.env.AGENT_OFFICE_TITLES ? process.env.AGENT_OFFICE_TITLES !== '0' : file.titles !== false,
   };
 }

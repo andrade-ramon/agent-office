@@ -29,11 +29,12 @@ describe('ClaudeProcessWatcher (~/.claude/sessions/<pid>.json)', () => {
   });
 
   it('cria sessões para processos vivos e as marca como vivas', async () => {
-    write(process.pid, { sessionId: 'viva', status: 'idle' });
+    write(process.pid, { sessionId: 'viva', status: 'idle', name: 'Mapa de sistemas: atualização semanal' });
     write(DEAD_PID, { sessionId: 'morta', status: 'busy' });
     const watcher = new ClaudeProcessWatcher(dir, store);
     await watcher.poll(now);
     expect(store.get('claude:viva')).toMatchObject({
+      title: 'Mapa de sistemas: atualização semanal',
       status: 'done',
       alive: true,
       pid: process.pid,

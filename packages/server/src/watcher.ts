@@ -178,8 +178,16 @@ export class TranscriptWatcher {
     try {
       const raw: unknown = JSON.parse(await readFile(path.replace(/\.jsonl$/, '.meta.json'), 'utf8'));
       const agentType = isObj(raw) ? str(raw.agentType) : undefined;
-      if (agentType) {
-        this.opts.store.apply({ kind: 'meta', agent: 'claude', sessionId: agentId, ts: Date.now(), meta: { agentType } });
+      // "description" é o resumo de 3 a 5 palavras que o agente-pai dá à tarefa.
+      const title = isObj(raw) ? str(raw.description) : undefined;
+      if (agentType || title) {
+        this.opts.store.apply({
+          kind: 'meta',
+          agent: 'claude',
+          sessionId: agentId,
+          ts: Date.now(),
+          meta: { ...(agentType ? { agentType } : {}), ...(title ? { title } : {}) },
+        });
       }
     } catch {
       /* sem metadados: segue sem o tipo */

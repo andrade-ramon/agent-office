@@ -280,6 +280,7 @@ describe('script de hook (fail-open e privacidade)', () => {
         transcript_path: '/Users/ana/.claude/projects/x/sess-1.jsonl',
         tool_name: 'Bash',
         tool_use_id: 'toolu_1',
+        session_title: 'Corrigir frete no checkout',
         tool_input: { command: 'cat ~/.ssh/id_rsa # SEGREDO' },
         prompt: 'SEGREDO do prompt',
         last_assistant_message: 'SEGREDO da resposta',
@@ -300,6 +301,7 @@ describe('script de hook (fail-open e privacidade)', () => {
       cwd: '/Users/ana/loja',
       tool_name: 'Bash',
       tool_use_id: 'toolu_1',
+      session_title: 'Corrigir frete no checkout',
     });
     expect(sent.pid).toBeUndefined();
 

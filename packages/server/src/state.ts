@@ -10,7 +10,7 @@ import {
   type SessionStatus,
   type ToolCategory,
 } from './schema.js';
-import { hashString, projectFromCwd } from './util.js';
+import { cleanTitle, hashString, projectFromCwd } from './util.js';
 
 export interface StoreOptions {
   /** Sem eventos por este tempo → "idle". */
@@ -24,6 +24,8 @@ export interface StoreOptions {
   timelineSize: number;
   /** Janela para agrupar atualizações de sessão antes de emitir. */
   flushMs: number;
+  /** Guarda o assunto (título) das sessões. Desligue para metadados estritos. */
+  titles: boolean;
 }
 
 export const DEFAULT_STORE_OPTIONS: StoreOptions = {
@@ -33,6 +35,7 @@ export const DEFAULT_STORE_OPTIONS: StoreOptions = {
   purgeAfterMs: 90_000,
   timelineSize: 40,
   flushMs: 25,
+  titles: true,
 };
 
 /** Evento mais antigo que o último estado aplicado por mais que isto é "atrasado". */
@@ -428,6 +431,10 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
       if (s.parentKey && s.label === 'Subagente') s.label = meta.agentType;
     }
     if (meta.nickname) s.label = meta.nickname;
+    if (this.options.titles) {
+      const title = cleanTitle(meta.title);
+      if (title) s.title = title;
+    }
     if (meta.alive !== undefined) s.alive = meta.alive;
     if (meta.contextTokens || meta.contextWindow) {
       const tokens = meta.contextTokens ?? s.context?.tokens ?? 0;

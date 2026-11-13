@@ -39,6 +39,24 @@ const WEIGHTS: [ToolCategory, number][] = [
 
 const SUBAGENT_TYPES = ['Explore', 'general-purpose', 'code-reviewer', 'Plan'];
 
+const TITLES = [
+  'Corrigir cálculo de frete no checkout',
+  'Migrar autenticação para OAuth',
+  'Investigar lentidão no relatório mensal',
+  'Adicionar testes ao módulo de pagamentos',
+  'Atualizar dependências e corrigir build',
+  'Refatorar tela de cadastro',
+  'Revisar pipeline de deploy',
+  'Documentar a API pública',
+];
+const SUBAGENT_TASKS = [
+  'Mapear rotas da API',
+  'Procurar usos da função antiga',
+  'Revisar mudanças do diff',
+  'Ler a documentação da biblioteca',
+  'Rodar e resumir os testes',
+];
+
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
@@ -168,7 +186,7 @@ export class DemoSimulator {
       project: parent.project,
       tokens: 4000,
     };
-    this.emit(child, 'subagent_start', {}, { agentType: pick(SUBAGENT_TYPES) });
+    this.emit(child, 'subagent_start', {}, { agentType: pick(SUBAGENT_TYPES), title: pick(SUBAGENT_TASKS) });
     await this.sleep(rand(1500, 3000));
     const steps = Math.round(rand(2, 5));
     for (let i = 0; i < steps && !this.stopped; i++) {
@@ -188,7 +206,7 @@ export class DemoSimulator {
       project,
       tokens: Math.round(rand(8000, 30000)),
     };
-    this.emit(a, 'session_start', {}, { entrypoint: agent === 'claude' ? 'cli' : 'Codex Desktop' });
+    this.emit(a, 'session_start', {}, { entrypoint: agent === 'claude' ? 'cli' : 'Codex Desktop', title: pick(TITLES) });
     await this.sleep(rand(2500, 4500));
 
     const turns = Math.round(rand(2, 4));

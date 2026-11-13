@@ -245,7 +245,9 @@ export async function runDoctor(paths: Paths): Promise<Check[]> {
       checks.push(
         health && health.lastHookAt.claude
           ? ok('Eventos de hook do Claude', `último recebido às ${new Date(health.lastHookAt.claude).toLocaleTimeString()}`)
-          : warn('Eventos de hook do Claude', 'nenhum recebido ainda', 'abra uma sessão nova do Claude Code; sessões já abertas continuam pelo watcher'),
+          : health && health.uptimeMs < 10 * 60_000
+            ? ok('Eventos de hook do Claude', 'nenhum desde que o servidor reiniciou (aguardando a próxima sessão)')
+            : warn('Eventos de hook do Claude', 'nenhum recebido ainda', 'abra uma sessão nova do Claude Code; sessões já abertas continuam pelo watcher'),
       );
     }
     checks.push(

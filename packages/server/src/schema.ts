@@ -55,6 +55,11 @@ export interface EventMeta {
   contextTokens?: number;
   contextWindow?: number;
   /**
+   * Assunto da sessão em poucas palavras: o título que o próprio agente dá à
+   * sessão/thread, ou a descrição curta da tarefa de um subagente.
+   */
+  title?: string;
+  /**
    * Ferramenta-invólucro que executa outras ferramentas por dentro (o "exec" do
    * code mode do Codex). Quando os hooks já reportam as ferramentas reais da
    * sessão, o invólucro visto pelo watcher é ignorado.
@@ -117,6 +122,8 @@ export interface SessionState {
   parentSessionId?: string;
   /** Nome amigável do personagem. */
   label: string;
+  /** Assunto da sessão em poucas palavras (título da sessão ou tarefa do subagente). */
+  title?: string;
   cwd: string;
   project: string;
   status: SessionStatus;
