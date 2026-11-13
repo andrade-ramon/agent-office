@@ -124,14 +124,13 @@ export class ClaudeProcessWatcher {
       source: 'system',
     });
 
-    let s = this.store.get(key);
+    const s = this.store.get(key);
     if (!s || s.status === 'ended') {
       // Processo vivo sem atividade recente no transcript: cria a partir do pid file.
       const startTs = replay ? entry.statusUpdatedAt || entry.startedAt || now : now;
       this.store.apply(base('session_start', startTs), { replay });
       if (entry.status === 'busy') this.store.apply(base('prompt', startTs + 1), { replay: true });
       else if (entry.status === 'idle') this.store.apply(base('stop', startTs + 1), { replay: true });
-      s = this.store.get(key);
     } else if (entry.status === 'idle') {
       // O processo diz que terminou o turno, mas não vimos o fim (ex.: interrupção).
       if (IDLE_FROM.has(s.status) && entry.statusUpdatedAt >= s.lastActivityAt - 2000 && now - s.lastActivityAt > 6000) {
