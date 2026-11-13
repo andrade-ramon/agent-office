@@ -266,7 +266,8 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
           this.end(key, now, 'parent_ended');
           continue;
         }
-        if ((s.status === 'done' || s.status === 'idle') && now - s.statusSince > childEndAfterMs) {
+        // Só quem concluiu a tarefa sai; um subagente quieto pode estar gerando uma resposta longa.
+        if (s.status === 'done' && now - s.statusSince > childEndAfterMs) {
           this.end(key, now, 'subagent_finished');
           continue;
         }

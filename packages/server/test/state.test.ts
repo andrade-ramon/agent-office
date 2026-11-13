@@ -157,6 +157,11 @@ describe('SessionStore', () => {
     store.tick(T0 + 1000 + 91_000);
     expect(store.get('codex:c-child')?.status).toBe('ended');
 
+    // subagente apenas quieto (gerando uma resposta longa) não é encerrado
+    store.apply(ev('subagent_start', T0, { sessionId: 'lento', parentSessionId: 's1' }));
+    store.tick(T0 + 8 * 60_000);
+    expect(store.get('claude:lento')?.status).toBe('idle');
+
     store.apply(ev('subagent_start', T0, { sessionId: 'a1', parentSessionId: 's1' }));
     store.apply(ev('session_end', T0 + 10, {}));
     store.tick(T0 + 20);

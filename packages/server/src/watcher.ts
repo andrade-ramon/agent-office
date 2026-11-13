@@ -1,4 +1,4 @@
-import { open, type FileHandle } from 'node:fs/promises';
+import { open, readFile, type FileHandle } from 'node:fs/promises';
 import { relative, sep } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import chokidar, { type FSWatcher } from 'chokidar';
@@ -7,6 +7,7 @@ import { ClaudeTranscriptParser, classifyClaudePath } from './normalize/claude.j
 import { CodexRolloutParser, codexSessionIdFromPath } from './normalize/codex.js';
 import { sessionKey, type AgentKind, type Ingest } from './schema.js';
 import type { SessionStore } from './state.js';
+import { isObj, str } from './util.js';
 
 const TAIL_BYTES = 512 * 1024;
 const CHUNK_BYTES = 256 * 1024;
@@ -137,18 +138,36 @@ export class TranscriptWatcher {
     });
   }
 
-  private identify(agent: AgentKind, root: string, path: string): { key: string; make: (fresh: boolean) => LineParser } | null {
+  private identify(
+    agent: AgentKind,
+    root: string,
+    path: string,
+  ): { key: string; subagentId?: string; make: (fresh: boolean) => LineParser } | null {
     if (agent === 'claude') {
       const info = classifyClaudePath(relative(root, path));
       if (!info) return null;
       return {
         key: sessionKey('claude', info.agentId ?? info.sessionId),
+        ...(info.agentId ? { subagentId: info.agentId } : {}),
         make: (fresh) => new ClaudeTranscriptParser(info, { fresh }),
       };
     }
     const id = codexSessionIdFromPath(path);
     if (!id) return null;
     return { key: sessionKey('codex', id), make: () => new CodexRolloutParser(id) };
+  }
+
+  /** Subagentes do Claude têm um `agent-<id>.meta.json` ao lado com o tipo do agente. */
+  private async readSubagentMeta(path: string, agentId: string): Promise<void> {
+    try {
+      const raw: unknown = JSON.parse(await readFile(path.replace(/\.jsonl$/, '.meta.json'), 'utf8'));
+      const agentType = isObj(raw) ? str(raw.agentType) : undefined;
+      if (agentType) {
+        this.opts.store.apply({ kind: 'meta', agent: 'claude', sessionId: agentId, ts: Date.now(), meta: { agentType } });
+      }
+    } catch {
+      /* sem metadados: segue sem o tipo */
+    }
   }
 
   private track(agent: AgentKind, path: string, key: string, parser: LineParser, offset: number): Tracked {
@@ -185,6 +204,7 @@ export class TranscriptWatcher {
       // Arquivo novo: sessão nova, lê desde o início.
       const t = this.track(agent, path, id.key, id.make(true), 0);
       await this.enqueue(t, () => this.drain(t, false));
+      if (id.subagentId) await this.readSubagentMeta(path, id.subagentId);
       return;
     }
 
@@ -204,6 +224,7 @@ export class TranscriptWatcher {
       }
       await this.drain(t, true);
     });
+    if (id.subagentId) await this.readSubagentMeta(path, id.subagentId);
   }
 
   private onChange(agent: AgentKind, root: string, path: string): void {
@@ -216,6 +237,10 @@ export class TranscriptWatcher {
       t = this.track(agent, path, id.key, id.make(false), offset);
       const created = t;
       if (agent === 'codex' && offset > 0) void this.enqueue(created, () => this.readHead(created));
+      if (id.subagentId) {
+        const subagentId = id.subagentId;
+        void this.enqueue(created, () => this.drain(created, false)).then(() => this.readSubagentMeta(path, subagentId));
+      }
     }
     const target = t;
     void this.enqueue(target, () => this.drain(target, false));
