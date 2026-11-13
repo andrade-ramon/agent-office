@@ -454,6 +454,9 @@ ul {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
+  /* Com a lista estreita, o rótulo encolhe em vez de invadir a aba vizinha. */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .seg button b {
   color: var(--dim);

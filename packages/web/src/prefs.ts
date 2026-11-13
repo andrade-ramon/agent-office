@@ -21,7 +21,7 @@ export interface Prefs {
   detailWidth: number;
 }
 
-export const SIDEBAR_WIDTH = { min: 180, max: 560, default: 224 } as const;
+export const SIDEBAR_WIDTH = { min: 200, max: 560, default: 224 } as const;
 export const DETAIL_WIDTH = { min: 260, max: 720, default: 320 } as const;
 
 export const DEFAULT_PREFS: Prefs = {
