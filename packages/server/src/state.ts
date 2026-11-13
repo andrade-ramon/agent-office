@@ -270,6 +270,21 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
     );
   }
 
+  /**
+   * Sai de "aguardando o usuário" e volta ao trabalho (permissão concedida ou
+   * pergunta respondida) quando a fonte sabe disso sem um evento próprio.
+   */
+  resume(key: string, ts: number): void {
+    const it = this.sessions.get(key);
+    if (!it) return;
+    const s = it.state;
+    if (s.status !== 'permission_wait' && s.status !== 'waiting_input') return;
+    this.refreshWorking(it, ts);
+    s.lastActivityAt = Math.max(s.lastActivityAt, ts);
+    it.lastStateTs = Math.max(it.lastStateTs, ts);
+    this.markDirty(key);
+  }
+
   /** Aplica os timeouts de inatividade. Chamado periodicamente. */
   tick(now: number = Date.now()): void {
     const { idleAfterMs, endAfterMs, childEndAfterMs, purgeAfterMs } = this.options;

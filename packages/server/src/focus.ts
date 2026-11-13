@@ -24,17 +24,22 @@ async function procInfo(pid: number): Promise<ProcInfo | null> {
   return { pid, ppid: Number(m[1]), comm: m[2] ?? '' };
 }
 
-/** Sobe a árvore de processos até achar um app (.app) dono da sessão. */
+/**
+ * Sobe a árvore de processos e devolve o app (.app) mais externo: o próprio
+ * agente pode rodar de dentro de um bundle auxiliar (ex.: o claude.app embutido
+ * no app de desktop), e o que interessa é a janela que o hospeda.
+ */
 async function findMacApp(pid: number): Promise<string | null> {
   let current = pid;
-  for (let i = 0; i < 14 && current > 1; i++) {
+  let found: string | null = null;
+  for (let i = 0; i < 16 && current > 1; i++) {
     const info = await procInfo(current);
-    if (!info) return null;
+    if (!info) break;
     const idx = info.comm.indexOf('.app/');
-    if (idx > 0) return info.comm.slice(0, idx + 4);
+    if (idx > 0) found = info.comm.slice(0, idx + 4);
     current = info.ppid;
   }
-  return null;
+  return found;
 }
 
 async function ttyOf(pid: number): Promise<string | null> {

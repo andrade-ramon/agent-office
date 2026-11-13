@@ -14,6 +14,8 @@ interface ProcEntry {
   startedAt: number;
   entrypoint?: string;
   status?: string;
+  /** Presente quando status = "waiting" (ex.: "permission prompt"). */
+  waitingFor?: string;
   statusUpdatedAt: number;
 }
 
@@ -26,13 +28,16 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-const BUSY_FROM = new Set(['done', 'idle', 'waiting_input']);
-const IDLE_FROM = new Set(['thinking', 'working', 'starting']);
+const BUSY_FROM = new Set(['done', 'idle']);
+const IDLE_FROM = new Set(['thinking', 'working', 'starting', 'permission_wait', 'waiting_input']);
+const WAITING = new Set(['permission_wait', 'waiting_input']);
 
 /**
  * O Claude Code mantém um arquivo por processo vivo em `~/.claude/sessions/<pid>.json`
  * (pid, sessionId, cwd, status). Usamos isso — só metadados — para:
  *   • mostrar sessões que já estavam abertas, mesmo paradas há horas;
+ *   • saber que a sessão está parada esperando você (status "waiting"), e
+ *     quando voltou a trabalhar — mesmo sem hooks;
  *   • saber quando o processo saiu (fim de sessão sem depender de timeout);
  *   • trazer a janela certa para frente (pid).
  */
@@ -142,14 +147,23 @@ export class ClaudeProcessWatcher {
       this.store.apply(base('session_start', startTs), { replay });
       if (entry.status === 'busy') this.store.apply(base('prompt', startTs + 1), { replay: true });
       else if (entry.status === 'idle') this.store.apply(base('stop', startTs + 1), { replay: true });
+      else if (entry.status === 'waiting') this.store.apply(base(waitingEvent(entry), startTs + 1), { replay });
+    } else if (entry.status === 'waiting') {
+      // Parada esperando o usuário (pedido de permissão ou pergunta).
+      if (!WAITING.has(s.status)) {
+        this.store.apply(base(waitingEvent(entry), Math.max(entry.statusUpdatedAt, s.lastActivityAt + 1)), { replay });
+      }
     } else if (entry.status === 'idle') {
       // O processo diz que terminou o turno, mas não vimos o fim (ex.: interrupção).
       if (IDLE_FROM.has(s.status) && entry.statusUpdatedAt >= s.lastActivityAt - 2000 && now - s.lastActivityAt > 6000) {
         this.store.apply(base('stop', Math.max(entry.statusUpdatedAt, s.lastActivityAt + 1)), { replay });
       }
     } else if (entry.status === 'busy') {
-      // O processo voltou a trabalhar e ainda não vimos o prompt.
-      if (BUSY_FROM.has(s.status) && entry.statusUpdatedAt > s.lastActivityAt + 2000) {
+      if (WAITING.has(s.status)) {
+        // O usuário respondeu (permissão concedida/negada): o agente voltou ao trabalho.
+        if (entry.statusUpdatedAt >= s.statusSince - 1000) this.store.resume(key, Math.max(entry.statusUpdatedAt, s.lastActivityAt + 1));
+      } else if (BUSY_FROM.has(s.status) && entry.statusUpdatedAt > s.lastActivityAt + 2000) {
+        // O processo voltou a trabalhar e ainda não vimos o prompt.
         this.store.apply(base('prompt', entry.statusUpdatedAt), { replay });
       }
     }
@@ -165,6 +179,10 @@ export class ClaudeProcessWatcher {
   }
 }
 
+function waitingEvent(entry: ProcEntry): 'permission_wait' | 'waiting_input' {
+  return /permission/i.test(entry.waitingFor ?? '') ? 'permission_wait' : 'waiting_input';
+}
+
 function parseEntry(file: string, mtimeMs: number, raw: unknown): ProcEntry | null {
   if (!isObj(raw)) return null;
   const pid = num(raw.pid);
@@ -172,6 +190,7 @@ function parseEntry(file: string, mtimeMs: number, raw: unknown): ProcEntry | nu
   if (!pid || !sessionId) return null;
   const entrypoint = str(raw.entrypoint);
   const status = str(raw.status);
+  const waitingFor = str(raw.waitingFor);
   return {
     file,
     mtimeMs,
@@ -181,6 +200,7 @@ function parseEntry(file: string, mtimeMs: number, raw: unknown): ProcEntry | nu
     startedAt: num(raw.startedAt) ?? 0,
     ...(entrypoint ? { entrypoint } : {}),
     ...(status ? { status } : {}),
+    ...(waitingFor ? { waitingFor } : {}),
     statusUpdatedAt: num(raw.statusUpdatedAt) ?? num(raw.updatedAt) ?? 0,
   };
 }
