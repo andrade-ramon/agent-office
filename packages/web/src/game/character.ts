@@ -743,7 +743,9 @@ export class Character {
 
   private updateTag(detailed: boolean): void {
     const s = this.session;
-    const label = detailed && s.project ? `${s.label} · ${s.project}` : s.label;
+    // Com zoom ou destaque, a etiqueta mostra o assunto da sessão (ou o projeto, se não houver).
+    const about = s.title ? shorten(s.title, 30) : s.project;
+    const label = detailed && about ? `${s.label} · ${about}` : s.label;
     const attention = this.attention;
     const id = `${label}|${attention ? 1 : 0}|${this.selected ? 1 : 0}`;
     if (id === this.tagLabel) return;
@@ -813,4 +815,8 @@ export class Character {
       small: this.variant.small,
     };
   }
+}
+
+function shorten(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }

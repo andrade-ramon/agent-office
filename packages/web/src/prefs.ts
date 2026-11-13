@@ -15,7 +15,14 @@ export interface Prefs {
   notify: boolean;
   notifyDone: boolean;
   timeMode: TimeMode;
+  /** Largura (px) da lista de sessões. */
+  sidebarWidth: number;
+  /** Largura (px) do painel de detalhes. */
+  detailWidth: number;
 }
+
+export const SIDEBAR_WIDTH = { min: 180, max: 560, default: 224 } as const;
+export const DETAIL_WIDTH = { min: 260, max: 720, default: 320 } as const;
 
 export const DEFAULT_PREFS: Prefs = {
   agent: 'all',
@@ -26,12 +33,18 @@ export const DEFAULT_PREFS: Prefs = {
   notify: false,
   notifyDone: false,
   timeMode: 'auto',
+  sidebarWidth: SIDEBAR_WIDTH.default,
+  detailWidth: DETAIL_WIDTH.default,
 };
 
 const KEY = 'agent-office:prefs:v1';
 
 function bool(v: unknown, fallback: boolean): boolean {
   return typeof v === 'boolean' ? v : fallback;
+}
+
+function width(v: unknown, range: { min: number; max: number; default: number }): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.max(range.min, Math.min(range.max, v))) : range.default;
 }
 
 export function loadPrefs(): Prefs {
@@ -50,6 +63,8 @@ export function loadPrefs(): Prefs {
       notify: bool(data.notify, DEFAULT_PREFS.notify),
       notifyDone: bool(data.notifyDone, DEFAULT_PREFS.notifyDone),
       timeMode,
+      sidebarWidth: width(data.sidebarWidth, SIDEBAR_WIDTH),
+      detailWidth: width(data.detailWidth, DETAIL_WIDTH),
     };
   } catch {
     return { ...DEFAULT_PREFS };

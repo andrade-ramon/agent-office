@@ -56,7 +56,7 @@ function Row({
         className="row-button"
         onClick={() => onSelect(s.key)}
         onDoubleClick={() => onActivate(s.key)}
-        title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}\n${describeActivity(s)}\nDuplo clique: trazer a janela para a frente`}
+        title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}${s.title ? `\n${s.title}` : ''}\n${describeActivity(s)}\nDuplo clique: trazer a janela para a frente`}
       >
         <Avatar session={s} size={row.depth === 1 ? 24 : 32} />
         <span className="row-main">
@@ -64,6 +64,7 @@ function Row({
             <span className="row-name">{s.label}</span>
             <span className="row-project">{s.project}</span>
           </span>
+          {s.title && <span className="row-subject">{s.title}</span>}
           <span className="row-sub">
             <StatusChip status={s.status} />
             <span className="row-what">{shortActivity(s)}</span>

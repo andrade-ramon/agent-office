@@ -71,7 +71,9 @@ O demo usa outra porta (4748), não lê seus transcripts e não grava histórico
 
 ### Na interface
 
-- **Clique** em um personagem: painel com agente, projeto, diretório, ferramenta atual, uso de contexto, tempo ativo e linha do tempo recente.
+- **Clique** em um personagem: painel com o **assunto** da sessão, agente, projeto, diretório, ferramenta atual, uso de contexto, tempo ativo e linha do tempo recente.
+- **Assunto**: cada sessão mostra, em poucas palavras, no que está trabalhando — o título que o próprio agente dá à sessão (Claude Code) ou à thread (Codex) e, para subagentes, a descrição curta da tarefa. Aparece na lista, no painel e na etiqueta do personagem.
+- **Painéis redimensionáveis**: arraste a borda da lista de sessões ou do painel de detalhes para ajustar a largura (duplo clique na borda volta ao padrão; a largura fica salva).
 - **Duplo clique**: tenta trazer o terminal/app daquela sessão para frente (quando o sistema permite).
 - **Arrastar** move a câmera, **roda do mouse** dá zoom, **Focar** segue o personagem selecionado.
 - Filtros por agente e por projeto, lista lateral de sessões, modo compacto e tela cheia.
@@ -125,7 +127,7 @@ Além disso, o servidor lê `~/.claude/sessions/<pid>.json` (um arquivo por proc
 `starting → thinking ⇄ working → done`, com `waiting_input`, `permission_wait` e `error` no meio do caminho. Sem eventos por **5 minutos** a sessão vira `idle` (vai para a copa); depois de **30 minutos** — e sem um processo vivo conhecido — é considerada encerrada. Os dois tempos são configuráveis em `~/.agent-office/config.json`:
 
 ```json
-{ "port": 4747, "idleAfterMin": 5, "endAfterMin": 30 }
+{ "port": 4747, "idleAfterMin": 5, "endAfterMin": 30, "titles": true }
 ```
 
 ### O hook nunca atrapalha o agente
@@ -142,7 +144,8 @@ O script de hook (`~/.agent-office/bin/agent-office-hook`) é **fail-open**:
 ## Privacidade
 
 - O servidor escuta **somente em `127.0.0.1`**, valida o cabeçalho `Host` e recusa requisições e WebSockets com `Origin` de fora do loopback (nenhum site que você visite consegue ler ou injetar eventos).
-- O hook envia **apenas metadados**: tipo do evento, nome/categoria da ferramenta, `cwd`, ids de sessão/ferramenta, modelo e modo de permissão. Prompts, respostas, argumentos e saídas de ferramentas e conteúdo de arquivos são descartados dentro do próprio script, antes de qualquer envio — veja a lista `ALLOW` em [`agent-office-hook.mjs`](packages/hooks/hook/agent-office-hook.mjs).
+- O hook envia **apenas metadados**: tipo do evento, nome/categoria da ferramenta, `cwd`, ids de sessão/ferramenta, modelo, modo de permissão e o título da sessão. Prompts, respostas, argumentos e saídas de ferramentas e conteúdo de arquivos são descartados dentro do próprio script, antes de qualquer envio — veja a lista `ALLOW` em [`agent-office-hook.mjs`](packages/hooks/hook/agent-office-hook.mjs).
+- **Assunto da sessão**: a única informação derivada do conteúdo é o título curto (até 90 caracteres) que o próprio agente dá à sessão — o mesmo que aparece na barra lateral do Claude ou do Codex — e a descrição curta da tarefa de um subagente. Fica só na sua máquina, em memória (não vai para o SQLite). Para não exibir nem isso, use `"titles": false` em `~/.agent-office/config.json` e reinicie o servidor.
 - O watcher lê os transcripts localmente apenas para classificar cada linha (é um prompt? uma chamada de ferramenta?). Nenhum conteúdo é guardado, transmitido ao navegador ou gravado no SQLite.
 - O histórico (`~/.agent-office/agent-office.db`) guarda eventos e contagens por 30 dias. Nada mais.
 - Não há telemetria, CDN, fontes remotas nem qualquer requisição para fora.

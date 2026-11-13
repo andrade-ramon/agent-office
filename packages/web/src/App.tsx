@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type ReactElement,
+} from 'react';
 import type { SessionState } from '@agent-office/server/schema';
 import type { TimeMode } from './game/daynight';
 import type { CameraInfo, OfficeScene } from './game/scene';
@@ -10,7 +19,8 @@ import {
   setTitle,
   showNotification,
 } from './notify';
-import { loadPrefs, savePrefs, type AgentFilter, type Prefs } from './prefs';
+import { DETAIL_WIDTH, loadPrefs, savePrefs, SIDEBAR_WIDTH, type AgentFilter, type Prefs } from './prefs';
+import { Resizer } from './ui/Resizer';
 import type { OfficeStore } from './store';
 import { DetailPanel } from './ui/DetailPanel';
 import { Header, connLabel } from './ui/Header';
@@ -26,7 +36,6 @@ interface Toast {
   kind: 'info' | 'ok' | 'warn';
 }
 
-const DETAIL_WIDTH = 300;
 let toastSeq = 0;
 
 export function App({ store }: { store: OfficeStore }): ReactElement {
@@ -230,7 +239,10 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
   }, [firstAttention, selectAndFocus]);
 
   return (
-    <div className={`app ${prefs.compact ? 'compact' : ''}`}>
+    <div
+      className={`app ${prefs.compact ? 'compact' : ''}`}
+      style={{ '--sidebar-w': `${prefs.sidebarWidth}px`, '--detail-w': `${prefs.detailWidth}px` } as CSSProperties}
+    >
       {!prefs.compact && (
         <Header
           conn={state.conn}
@@ -270,6 +282,18 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             onActivate={activate}
           />
         )}
+        {!prefs.compact && (
+          <Resizer
+            edge="right"
+            className="resizer-sidebar"
+            label="Largura da lista de sessões"
+            width={prefs.sidebarWidth}
+            min={SIDEBAR_WIDTH.min}
+            max={SIDEBAR_WIDTH.max}
+            defaultWidth={SIDEBAR_WIDTH.default}
+            onResize={(sidebarWidth) => update({ sidebarWidth })}
+          />
+        )}
 
         <main className={selected ? 'stage has-detail' : 'stage'}>
           <OfficeCanvas
@@ -280,7 +304,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             labels={prefs.labels}
             areas={prefs.areas}
             timeMode={prefs.timeMode}
-            insetRight={selected ? DETAIL_WIDTH : 0}
+            insetRight={selected ? prefs.detailWidth : 0}
             onSelect={setSelectedKey}
             onActivate={activate}
             onCamera={setCamera}
@@ -376,6 +400,18 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
               onSelect={selectAndFocus}
               onFocusCamera={() => sceneRef.current?.focusOn(selected.key)}
               onFocusWindow={() => focusWindow(selected.key)}
+            />
+          )}
+          {selected && (
+            <Resizer
+              edge="left"
+              className="resizer-detail"
+              label="Largura do painel de detalhes"
+              width={prefs.detailWidth}
+              min={DETAIL_WIDTH.min}
+              max={DETAIL_WIDTH.max}
+              defaultWidth={DETAIL_WIDTH.default}
+              onResize={(detailWidth) => update({ detailWidth })}
             />
           )}
 

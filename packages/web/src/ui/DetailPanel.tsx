@@ -78,6 +78,12 @@ export function DetailPanel(p: Props): ReactElement {
         </button>
       </header>
 
+      {s.title && (
+        <p className="detail-subject" title="Assunto da sessão">
+          {s.title}
+        </p>
+      )}
+
       <div className="detail-status">
         <StatusChip status={s.status} />
         <span className="muted">{formatAgo(p.now - s.statusSince)}</span>
@@ -97,6 +103,7 @@ export function DetailPanel(p: Props): ReactElement {
 
       <div className="detail-scroll">
         <dl className="fields">
+          <Field label="Assunto">{s.title || <span className="muted">sem título</span>}</Field>
           <Field label="Projeto">{s.project || '—'}</Field>
           <Field label="Diretório" mono>
             <span className="path" title={s.cwd}>
