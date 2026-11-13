@@ -218,6 +218,14 @@ async function cmdStatus(paths: Paths): Promise<number> {
   const claudeEvents = CLAUDE_EVENTS.map((e) => e.event);
   const claudeN = installedCount(paths.claudeSettings, claudeEvents);
   line(claudeN === claudeEvents.length ? 'ok' : claudeN > 0 ? 'warn' : 'fail', 'Hooks do Claude Code', `${claudeN}/${claudeEvents.length} eventos`);
+  const problems = readClaudeSettingsProblems(paths.claudeSettings);
+  if (problems.length > 0) {
+    line(
+      'warn',
+      'settings.json do Claude Code',
+      `ignorado pelo Claude Code (${problems.map((p) => p.message).join('; ')}) — corrija com "agent-office fix-settings"`,
+    );
+  }
 
   const codex = findCodex(paths);
   const codexEvents = Object.keys(codexHandlers(paths.hookLauncher, parseVersion(codex?.version)));
