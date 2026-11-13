@@ -148,8 +148,10 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
       return false;
     }
 
-    const late = ev.ts < it.lastStateTs - LATE_MS;
     const wasEnded = s.status === 'ended';
+    // Uma sessão encerrada só revive com sinal de atividade nova; um "stop" ou
+    // "tool_end" que chega depois do fim (outra fonte, atrasada) não a ressuscita.
+    const late = ev.ts < it.lastStateTs - LATE_MS || (wasEnded && !REVIVES.has(ev.event));
     const id = ev.meta?.toolUseId;
 
     switch (ev.event) {
@@ -535,6 +537,14 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
 }
 
 const IDLE_FROM = new Set<SessionStatus>(['starting', 'thinking', 'done', 'error']);
+const REVIVES = new Set<NormalizedEvent['event']>([
+  'session_start',
+  'subagent_start',
+  'prompt',
+  'tool_start',
+  'permission_wait',
+  'waiting_input',
+]);
 
 function defaultWindow(agent: AgentKind): number {
   return agent === 'claude' ? 200_000 : 272_000;

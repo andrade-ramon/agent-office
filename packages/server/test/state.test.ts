@@ -168,9 +168,13 @@ describe('SessionStore', () => {
     expect(store.get('claude:a1')?.status).toBe('ended');
   });
 
-  it('uma sessão encerrada revive com um novo evento', () => {
+  it('uma sessão encerrada revive com atividade nova, mas não com um fim de turno atrasado', () => {
     store.apply(ev('prompt', T0));
     store.apply(ev('session_end', T0 + 1));
+    // `codex exec`: o SessionEnd do hook chega antes do task_complete lido do arquivo
+    store.apply(ev('stop', T0 + 500, { source: 'watcher' }));
+    store.apply(ev('tool_end', T0 + 600, { id: 'x', source: 'watcher' }));
+    expect(store.get('claude:s1')).toMatchObject({ status: 'ended', endedAt: T0 + 1 });
     store.apply(ev('prompt', T0 + 10_000));
     expect(store.get('claude:s1')).toMatchObject({ status: 'thinking' });
     expect(store.get('claude:s1')?.endedAt).toBeUndefined();
