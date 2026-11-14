@@ -134,6 +134,11 @@ export interface SessionState {
   startedAt: number;
   lastActivityAt: number;
   endedAt?: number;
+  /**
+   * Por que a sessão está esperando o usuário (ex.: "permission_prompt",
+   * "idle_prompt", "elicitation_dialog"). Só existe em waiting_input/permission_wait.
+   */
+  attentionReason?: string;
   /** Momento do último erro de ferramenta (para animação transitória). */
   lastErrorAt?: number;
   /** Subagentes ativos. */
@@ -153,6 +158,16 @@ export interface SessionState {
 /** Sessões que pedem a atenção do usuário. */
 export function needsAttention(status: SessionStatus): boolean {
   return status === 'waiting_input' || status === 'permission_wait';
+}
+
+/**
+ * A sessão está parada esperando uma DECISÃO do usuário: um pedido de permissão
+ * ou uma pergunta. Um turno que simplesmente terminou e está ocioso no prompt
+ * ("idle_prompt") não conta.
+ */
+export function needsDecision(s: Pick<SessionState, 'status' | 'attentionReason'>): boolean {
+  if (s.status === 'permission_wait') return true;
+  return s.status === 'waiting_input' && s.attentionReason !== 'idle_prompt';
 }
 
 export function sessionKey(agent: AgentKind, sessionId: string): string {
@@ -208,6 +223,8 @@ export interface HealthResponse {
   lastHookAt: { claude: number | null; codex: number | null };
   watcher: { enabled: boolean; claudeFiles: number; codexFiles: number; tracked: number };
   webBuilt: boolean;
+  /** Alerta por voz: ligado? quantas sessões aguardam decisão agora? */
+  voiceAlert: { enabled: boolean; pending: number };
 }
 
 export interface FocusResponse {

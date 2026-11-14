@@ -63,10 +63,24 @@ export function getPaths(env: NodeJS.ProcessEnv = process.env): Paths {
   };
 }
 
+export interface VoiceAlertConfig {
+  enabled: boolean;
+  /** O que falar (normalmente o seu nome). */
+  text: string;
+  /** Segundos entre repetições. */
+  everySec?: number;
+  /** Segundos de espera antes do primeiro chamado. */
+  delaySec?: number;
+  /** Voz do sistema (vazio = padrão). */
+  voice?: string;
+}
+
 export interface OfficeConfig {
   port: number;
   idleAfterMin?: number;
   endAfterMin?: number;
+  titles?: boolean;
+  voiceAlert?: VoiceAlertConfig;
 }
 
 export function readConfig(paths: Paths): OfficeConfig {

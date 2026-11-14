@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
+import { currentAlert, describeAlert, disableAlert, enableAlert, speakOnce } from './alert.js';
 import { runDoctor, type Level } from './doctor.js';
 import {
   CLAUDE_EVENTS,
@@ -71,6 +72,10 @@ Uso: agent-office <comando> [opções]
   restart      reinicia o servidor
   open         abre a interface no navegador
   service      inicialização automática: install | uninstall | status | restart
+  alert        alerta por voz: fala um texto (seu nome) e repete enquanto algum
+               agente estiver esperando uma decisão sua (permissão ou pergunta)
+                 on ["texto"] [--voice <voz>] [--every <seg>] [--delay <seg>]
+                 off | test | status
   doctor       diagnóstico completo
   fix-settings corrige problemas conhecidos do ~/.claude/settings.json que fazem
                o Claude Code ignorar o arquivo (ex.: statusLine sem "type")
@@ -243,6 +248,8 @@ async function cmdStatus(paths: Paths): Promise<number> {
     'Inicialização automática',
     service.installed ? `${service.kind} ${service.running ? 'ativo' : 'parado'}` : 'não configurada',
   );
+  const alert = currentAlert(paths);
+  if (alert.enabled) line('ok', 'Alerta por voz', describeAlert(alert));
   if (health?.lastHookAt) {
     const fmt = (t: number | null): string => (t ? new Date(t).toLocaleTimeString() : 'nunca');
     console.log(dim(`\n  último hook recebido — Claude: ${fmt(health.lastHookAt.claude)} · Codex: ${fmt(health.lastHookAt.codex)}`));
@@ -375,6 +382,49 @@ async function cmdService(paths: Paths, args: string[]): Promise<number> {
   return 0;
 }
 
+async function cmdAlert(paths: Paths, args: string[]): Promise<number> {
+  const sub = args[0] ?? 'status';
+  const port = resolvePort(paths);
+  if (sub === 'on') {
+    const text = args[1] && !args[1].startsWith('--') ? args[1] : undefined;
+    const every = Number(option(args, '--every'));
+    const delay = option(args, '--delay');
+    const voice = option(args, '--voice');
+    const r = enableAlert(paths, {
+      ...(text ? { text } : {}),
+      ...(voice ? { voice } : {}),
+      ...(every > 0 ? { everySec: every } : {}),
+      ...(delay !== undefined && Number(delay) >= 0 ? { delaySec: Number(delay) } : {}),
+    });
+    line(r.ok ? 'ok' : 'fail', r.ok ? 'Alerta por voz ligado' : 'Alerta por voz', r.detail);
+    if (r.ok && !(await getHealth(port))) {
+      console.log(dim('      O servidor está parado; o alerta vale quando ele subir (agent-office start).'));
+    }
+    return r.ok ? 0 : 1;
+  }
+  if (sub === 'off') {
+    disableAlert(paths);
+    line('ok', 'Alerta por voz desligado');
+    return 0;
+  }
+  const alert = currentAlert(paths);
+  if (sub === 'test') {
+    if (!alert.text) {
+      line('fail', 'Alerta por voz', 'nada configurado: agent-office alert on "Seu nome"');
+      return 1;
+    }
+    const spoke = speakOnce(alert.text, alert.voice);
+    line(spoke ? 'ok' : 'fail', spoke ? `Falei "${alert.text}"` : 'Não consegui falar', spoke ? 'se não ouviu, confira o volume' : 'sintetizador de voz indisponível');
+    return spoke ? 0 : 1;
+  }
+  const health = await getHealth(port);
+  line(alert.enabled ? 'ok' : 'warn', 'Alerta por voz', describeAlert(alert));
+  if (health?.voiceAlert) {
+    console.log(dim(`      servidor: ${health.voiceAlert.enabled ? 'ativo' : 'inativo'} · decisões pendentes agora: ${health.voiceAlert.pending}`));
+  }
+  return 0;
+}
+
 async function cmdDoctor(paths: Paths): Promise<number> {
   console.log(bold('\nagent-office doctor\n'));
   const checks = await runDoctor(paths);
@@ -435,6 +485,8 @@ async function main(): Promise<number> {
     }
     case 'service':
       return cmdService(paths, args);
+    case 'alert':
+      return cmdAlert(paths, args);
     case 'doctor':
       return cmdDoctor(paths);
     case 'fix-settings': {

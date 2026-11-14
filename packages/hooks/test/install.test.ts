@@ -22,7 +22,8 @@ import {
   parseVersion,
   versionGte,
 } from '../src/install.js';
-import { getPaths, HOOK_MARKER, type Paths } from '../src/paths.js';
+import { currentAlert, describeAlert, disableAlert, enableAlert } from '../src/alert.js';
+import { getPaths, HOOK_MARKER, readConfig, writeConfig, type Paths } from '../src/paths.js';
 import { launchdPlist, systemdUnit, windowsTaskArgs, type ServiceSpec } from '../src/service.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -332,6 +333,26 @@ describe('script de hook (fail-open e privacidade)', () => {
     expect(r.code).toBe(0);
     expect(r.ms).toBeLessThan(2500);
     server.closeAllConnections();
+  });
+});
+
+describe('alerta por voz (config)', () => {
+  it('liga, ajusta e desliga preservando o resto do config.json', () => {
+    writeConfig(paths, { port: 4800, idleAfterMin: 7 });
+    expect(enableAlert(paths, {}).ok).toBe(false); // sem texto ainda
+    const on = enableAlert(paths, { text: ' Ramon ', voice: 'Luciana' });
+    expect(on).toMatchObject({ ok: true, alert: { enabled: true, text: 'Ramon', everySec: 8, delaySec: 3, voice: 'Luciana' } });
+    expect(readConfig(paths)).toMatchObject({ port: 4800, idleAfterMin: 7, voiceAlert: { enabled: true, text: 'Ramon' } });
+    expect(describeAlert(currentAlert(paths))).toContain('"Ramon" a cada 8s');
+
+    // ajustar o intervalo mantém texto e voz
+    expect(enableAlert(paths, { everySec: 15 }).alert).toMatchObject({ text: 'Ramon', voice: 'Luciana', everySec: 15 });
+
+    disableAlert(paths);
+    expect(readConfig(paths)).toMatchObject({ port: 4800, voiceAlert: { enabled: false, text: 'Ramon', everySec: 15 } });
+    expect(describeAlert(currentAlert(paths))).toBe('desligado');
+    // religar sem repetir o texto
+    expect(enableAlert(paths, {}).alert).toMatchObject({ enabled: true, text: 'Ramon' });
   });
 });
 

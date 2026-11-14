@@ -214,9 +214,11 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
           break;
         case 'permission_wait':
           this.setStatus(it, 'permission_wait', ev.ts, ev.toolName ? ev.toolCategory : s.toolCategory, ev.toolName ?? s.toolName);
+          if (ev.meta?.reason) s.attentionReason = ev.meta.reason;
           break;
         case 'waiting_input':
           this.setStatus(it, 'waiting_input', ev.ts);
+          if (ev.meta?.reason) s.attentionReason = ev.meta.reason;
           break;
         case 'stop':
           it.openTools.clear();
@@ -512,6 +514,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
     if (s.status !== status) {
       s.status = status;
       s.statusSince = ts;
+      delete s.attentionReason;
     }
     s.toolCategory = category;
     s.toolName = toolName;

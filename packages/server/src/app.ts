@@ -23,6 +23,7 @@ import {
 } from './schema.js';
 import { SessionStore, type StoreOptions } from './state.js';
 import { isObj, num, projectFromCwd, str } from './util.js';
+import { VoiceAlert, type Speak, type VoiceAlertSettings } from './voice-alert.js';
 import { TranscriptWatcher } from './watcher.js';
 
 export interface AppOptions {
@@ -45,6 +46,8 @@ export interface AppOptions {
         usePolling?: boolean;
       };
   store?: Partial<StoreOptions>;
+  /** Alerta por voz enquanto houver decisão pendente (lido a cada passo, para valer sem reiniciar). */
+  voiceAlert?: { settings: () => VoiceAlertSettings; speak?: Speak; intervalMs?: number };
   tickMs?: number;
   log?: (msg: string) => void;
 }
@@ -215,6 +218,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       lastHookAt: { ...lastHookAt },
       watcher: { enabled: Boolean(watcher), ...w },
       webBuilt,
+      voiceAlert: voice?.status() ?? { enabled: false, pending: 0 },
     };
   });
 
@@ -291,6 +295,8 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   let watcher: TranscriptWatcher | null = null;
   let procs: ClaudeProcessWatcher | null = null;
   let codexTitles: CodexTitleWatcher | null = null;
+  // No modo demo as sessões são simuladas: nada de chamar o usuário.
+  const voice = opts.voiceAlert && !opts.demo ? new VoiceAlert(store, opts.voiceAlert.settings, opts.voiceAlert.speak) : null;
   let demo: DemoSimulator | null = null;
   const timers: NodeJS.Timeout[] = [];
 
@@ -360,6 +366,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       // As fontes sobem depois do listen: os hooks já podem entregar eventos
       // enquanto a varredura inicial dos transcripts acontece.
       await startSources();
+      voice?.start(opts.voiceAlert?.intervalMs);
       return port;
     },
     async close() {
@@ -367,6 +374,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       demo?.stop();
       procs?.stop();
       codexTitles?.stop();
+      voice?.stop();
       await watcher?.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

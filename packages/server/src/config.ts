@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -14,6 +14,47 @@ export interface OfficeConfig {
   endAfterMin: number;
   /** Mostra o assunto (título) das sessões. `false` mantém metadados estritos. */
   titles: boolean;
+}
+
+export interface VoiceAlertConfig {
+  enabled: boolean;
+  text: string;
+  everySec: number;
+  delaySec: number;
+  voice?: string;
+}
+
+/**
+ * Lê a seção "voiceAlert" do config.json. Relê o arquivo só quando ele muda,
+ * para que `agent-office alert on/off` valha sem reiniciar o servidor.
+ */
+export function voiceAlertReader(home: string = officeHome()): () => VoiceAlertConfig {
+  const file = join(home, 'config.json');
+  const off: VoiceAlertConfig = { enabled: false, text: '', everySec: 8, delaySec: 3 };
+  let cached = off;
+  let mtimeMs = -1;
+  return () => {
+    try {
+      const st = statSync(file);
+      if (st.mtimeMs === mtimeMs) return cached;
+      mtimeMs = st.mtimeMs;
+      const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+      const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).voiceAlert : undefined;
+      if (!v || typeof v !== 'object') return (cached = off);
+      const o = v as Record<string, unknown>;
+      cached = {
+        enabled: o.enabled === true,
+        text: typeof o.text === 'string' ? o.text : '',
+        everySec: positive(o.everySec) ?? off.everySec,
+        delaySec: typeof o.delaySec === 'number' && o.delaySec >= 0 ? o.delaySec : off.delaySec,
+        ...(typeof o.voice === 'string' && o.voice ? { voice: o.voice } : {}),
+      };
+      return cached;
+    } catch {
+      mtimeMs = -1;
+      return (cached = off);
+    }
+  };
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {

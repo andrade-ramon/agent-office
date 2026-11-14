@@ -20,6 +20,7 @@ export interface Health {
   lastHookAt: { claude: number | null; codex: number | null };
   watcher: { enabled: boolean; claudeFiles: number; codexFiles: number; tracked: number };
   webBuilt: boolean;
+  voiceAlert?: { enabled: boolean; pending: number };
 }
 
 export function httpGet(port: number, path: string, timeoutMs = 1500): Promise<{ status: number; body: string } | null> {

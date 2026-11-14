@@ -140,6 +140,9 @@ export class ClaudeProcessWatcher {
       toolCategory: 'other',
       ts,
       source: 'system',
+      ...((event === 'permission_wait' || event === 'waiting_input') && entry.waitingFor
+        ? { meta: { reason: entry.waitingFor } }
+        : {}),
     });
 
     const s = this.store.get(key);

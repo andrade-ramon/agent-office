@@ -15,7 +15,7 @@ process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
 }) as typeof process.emitWarning;
 
 const { createApp } = await import('./app.js');
-const { DEMO_PORT, HOST, loadConfig, officeHome } = await import('./config.js');
+const { DEMO_PORT, HOST, loadConfig, officeHome, voiceAlertReader } = await import('./config.js');
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -106,6 +106,7 @@ const app = await createApp({
     endAfterMs: config.endAfterMin * 60_000,
     titles: config.titles,
   },
+  voiceAlert: { settings: voiceAlertReader(home) },
   log,
 });
 
