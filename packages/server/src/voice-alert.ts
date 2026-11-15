@@ -1,10 +1,17 @@
 import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { needsDecision } from './schema.js';
 import type { SessionStore } from './state.js';
 
+/** `voice` fala o texto; `siren` e `beep` tocam um som gerado por código. */
+export type AlertSound = 'voice' | 'siren' | 'beep';
+export const ALERT_SOUNDS: readonly AlertSound[] = ['voice', 'siren', 'beep'];
+
 export interface VoiceAlertSettings {
   enabled: boolean;
-  /** O que falar (normalmente o seu nome). */
+  /** O que tocar. Ausente = `voice`. */
+  sound?: AlertSound;
+  /** O que falar (normalmente o seu nome) quando `sound` é `voice`. */
   text: string;
   /** Intervalo entre repetições, em segundos. */
   everySec: number;
@@ -22,6 +29,8 @@ export const DEFAULT_VOICE_ALERT: VoiceAlertSettings = {
 };
 
 export type Speak = (text: string, voice?: string) => Promise<void>;
+/** Toca o alerta uma vez (injetável nos testes). */
+export type PlayAlert = (settings: VoiceAlertSettings) => Promise<void>;
 
 function run(cmd: string, args: string[]): Promise<boolean> {
   return new Promise((resolve) => {
@@ -57,10 +66,42 @@ export const systemSpeak: Speak = async (text, voice) => {
   }
 };
 
+/** Arquivo WAV de um som do alerta (packages/server/assets/sounds). */
+export function soundFile(sound: Exclude<AlertSound, 'voice'>): string {
+  return fileURLToPath(new URL(`../assets/sounds/${sound}.wav`, import.meta.url));
+}
+
+/** Toca um WAV pelo tocador do sistema operacional, no volume atual. */
+export async function playFile(file: string): Promise<void> {
+  if (process.platform === 'darwin') {
+    await run('afplay', [file]);
+  } else if (process.platform === 'win32') {
+    await run('powershell', [
+      '-NoProfile',
+      '-Command',
+      `(New-Object System.Media.SoundPlayer '${file.replace(/'/g, "''")}').PlaySync()`,
+    ]);
+  } else if (!(await run('paplay', [file]))) {
+    await run('aplay', ['-q', file]);
+  }
+}
+
+/** true quando há o que tocar: um som, ou um texto para falar. */
+export function alertReady(settings: VoiceAlertSettings): boolean {
+  if (!settings.enabled) return false;
+  return (settings.sound ?? 'voice') !== 'voice' || cleanSpeech(settings.text).length > 0;
+}
+
+export const systemAlert: PlayAlert = async (settings) => {
+  const sound = settings.sound ?? 'voice';
+  if (sound === 'voice') await systemSpeak(settings.text, settings.voice || undefined);
+  else await playFile(soundFile(sound));
+};
+
 /**
- * Alerta por voz: enquanto alguma sessão estiver parada esperando uma decisão
- * do usuário (permissão ou pergunta), fala o texto configurado e repete até a
- * decisão ser tomada.
+ * Alerta sonoro: enquanto alguma sessão estiver parada esperando uma decisão
+ * do usuário (permissão ou pergunta), toca a sirene (ou fala o texto
+ * configurado) e repete até a decisão ser tomada.
  */
 export class VoiceAlert {
   private timer: NodeJS.Timeout | null = null;
@@ -70,7 +111,7 @@ export class VoiceAlert {
   constructor(
     private readonly store: SessionStore,
     private readonly settings: () => VoiceAlertSettings,
-    private readonly speak: Speak = systemSpeak,
+    private readonly play: PlayAlert = systemAlert,
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -97,15 +138,15 @@ export class VoiceAlert {
 
   status(): { enabled: boolean; pending: number } {
     const settings = this.settings();
-    const enabled = settings.enabled && cleanSpeech(settings.text).length > 0;
+    const enabled = alertReady(settings);
     return { enabled, pending: enabled ? this.pending(settings) : 0 };
   }
 
-  /** Um passo do alerta. Retorna true se falou. */
+  /** Um passo do alerta. Retorna true se tocou. */
   async tick(): Promise<boolean> {
     if (this.speaking) return false;
     const settings = this.settings();
-    if (!settings.enabled || !cleanSpeech(settings.text)) return false;
+    if (!alertReady(settings)) return false;
     if (this.pending(settings) === 0) {
       // Decisão tomada: o próximo pedido volta a chamar na hora.
       this.lastSpokeAt = 0;
@@ -115,9 +156,9 @@ export class VoiceAlert {
     this.speaking = true;
     this.lastSpokeAt = this.now();
     try {
-      await this.speak(settings.text, settings.voice || undefined);
+      await this.play(settings);
     } catch {
-      /* sem áudio/sintetizador: tenta de novo na próxima repetição */
+      /* sem áudio: tenta de novo na próxima repetição */
     } finally {
       this.speaking = false;
     }

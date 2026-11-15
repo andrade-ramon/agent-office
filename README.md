@@ -55,7 +55,7 @@ Abra **http://localhost:4747**.
 | `agent-office restart` | Reinicia o servidor. |
 | `agent-office open` | Abre a interface no navegador. |
 | `agent-office service install\|uninstall\|status\|restart` | Inicialização automática (launchd no macOS, `systemd --user` no Linux, Tarefa Agendada no Windows). |
-| `agent-office alert on "Seu nome"` | Liga o alerta por voz (veja abaixo). `off`, `test` e `status` completam. |
+| `agent-office alert on --sound siren` | Liga o alerta sonoro: sirene, bipe ou seu nome em voz alta (veja abaixo). `off`, `test` e `status` completam. |
 | `agent-office doctor` | Diagnóstico completo, incluindo o teste de fail-open do hook. |
 | `agent-office fix-settings` | Corrige problemas conhecidos do `~/.claude/settings.json` que fazem o Claude Code ignorar o arquivo. |
 | `agent-office uninstall` | `disconnect` + remove o serviço. `--purge` apaga `~/.agent-office`. |
@@ -75,26 +75,28 @@ Depois de instalado:
 
 Instale sempre pelo mesmo endereço (`localhost`, não `127.0.0.1`): para o navegador são apps diferentes. Para remover, use **Desinstalar** no menu ⋮ da janela do app (Chrome) ou apague o app da pasta Aplicativos (Safari).
 
-### Alerta por voz
+### Alerta sonoro
 
-Para não deixar um agente parado esperando você, o servidor pode **chamar seu nome em voz alta** e repetir até você decidir:
+Para não deixar um agente parado esperando você, o servidor pode **tocar uma sirene** (ou chamar seu nome em voz alta) e repetir até você decidir:
 
 ```bash
-agent-office alert on "Ramon"                        # liga (vale na hora, sem reiniciar)
+agent-office alert on --sound siren                  # sirene (vale na hora, sem reiniciar)
+agent-office alert on --sound beep                   # três bipes curtos, mais discreto
+agent-office alert on "Ramon" --sound voice          # fala o seu nome
 agent-office alert on --every 10 --voice Luciana     # ajusta intervalo e voz
-agent-office alert test                              # fala uma vez, para conferir o volume
+agent-office alert test                              # toca uma vez, para conferir o volume
 agent-office alert off
 ```
 
 - Dispara quando uma sessão está parada esperando uma **decisão** sua: um pedido de permissão ou uma pergunta do agente. Um turno que simplesmente terminou não dispara.
-- Espera 3 s antes do primeiro chamado (aprovações instantâneas não fazem barulho) e repete a cada 8 s enquanto houver decisão pendente; para sozinho quando você responde.
-- Usa o sintetizador de voz do sistema (`say` no macOS, `spd-say`/`espeak` no Linux, System.Speech no Windows) no volume atual do computador. Nada sai da máquina.
+- Espera 3 s antes do primeiro toque (aprovações instantâneas não fazem barulho) e repete a cada 8 s enquanto houver decisão pendente; para sozinho quando você responde.
+- A sirene e o bipe são arquivos WAV gerados por código (`packages/server/assets/sounds`), tocados pelo sistema (`afplay` no macOS, `paplay`/`aplay` no Linux, SoundPlayer no Windows). A voz usa o sintetizador do sistema (`say`, `spd-say`/`espeak`, System.Speech). Tudo no volume atual do computador; nada sai da máquina.
 - Não funciona no modo demo.
 
-A configuração fica em `~/.agent-office/config.json`:
+A configuração fica em `~/.agent-office/config.json` (`sound`: `siren`, `beep` ou `voice`):
 
 ```json
-{ "voiceAlert": { "enabled": true, "text": "Ramon", "everySec": 8, "delaySec": 3, "voice": "Luciana" } }
+{ "voiceAlert": { "enabled": true, "sound": "siren", "everySec": 8, "delaySec": 3 } }
 ```
 
 > No Codex não há sinal de "permissão concedida": se você aprovar um comando demorado, o alerta pode continuar até o comando terminar. No Claude Code a retomada é detectada na hora.

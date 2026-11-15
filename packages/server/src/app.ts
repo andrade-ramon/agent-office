@@ -23,7 +23,7 @@ import {
 } from './schema.js';
 import { SessionStore, type StoreOptions } from './state.js';
 import { isObj, num, projectFromCwd, str } from './util.js';
-import { VoiceAlert, type Speak, type VoiceAlertSettings } from './voice-alert.js';
+import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
 import { TranscriptWatcher } from './watcher.js';
 
 export interface AppOptions {
@@ -46,8 +46,8 @@ export interface AppOptions {
         usePolling?: boolean;
       };
   store?: Partial<StoreOptions>;
-  /** Alerta por voz enquanto houver decisão pendente (lido a cada passo, para valer sem reiniciar). */
-  voiceAlert?: { settings: () => VoiceAlertSettings; speak?: Speak; intervalMs?: number };
+  /** Alerta sonoro enquanto houver decisão pendente (lido a cada passo, para valer sem reiniciar). */
+  voiceAlert?: { settings: () => VoiceAlertSettings; play?: PlayAlert; intervalMs?: number };
   tickMs?: number;
   log?: (msg: string) => void;
 }
@@ -300,7 +300,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   let procs: ClaudeProcessWatcher | null = null;
   let codexTitles: CodexTitleWatcher | null = null;
   // No modo demo as sessões são simuladas: nada de chamar o usuário.
-  const voice = opts.voiceAlert && !opts.demo ? new VoiceAlert(store, opts.voiceAlert.settings, opts.voiceAlert.speak) : null;
+  const voice = opts.voiceAlert && !opts.demo ? new VoiceAlert(store, opts.voiceAlert.settings, opts.voiceAlert.play) : null;
   let demo: DemoSimulator | null = null;
   const timers: NodeJS.Timeout[] = [];
 

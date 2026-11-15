@@ -18,6 +18,7 @@ export interface OfficeConfig {
 
 export interface VoiceAlertConfig {
   enabled: boolean;
+  sound?: 'voice' | 'siren' | 'beep';
   text: string;
   everySec: number;
   delaySec: number;
@@ -44,6 +45,7 @@ export function voiceAlertReader(home: string = officeHome()): () => VoiceAlertC
       const o = v as Record<string, unknown>;
       cached = {
         enabled: o.enabled === true,
+        ...(o.sound === 'siren' || o.sound === 'beep' ? { sound: o.sound } : {}),
         text: typeof o.text === 'string' ? o.text : '',
         everySec: positive(o.everySec) ?? off.everySec,
         delaySec: typeof o.delaySec === 'number' && o.delaySec >= 0 ? o.delaySec : off.delaySec,

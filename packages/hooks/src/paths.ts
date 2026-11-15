@@ -32,6 +32,8 @@ export interface Paths {
   serverEntry: string;
   webDist: string;
   hookSource: string;
+  /** Sons do alerta, gerados por código (packages/server/assets/sounds). */
+  sounds: string;
 }
 
 export function getPaths(env: NodeJS.ProcessEnv = process.env): Paths {
@@ -60,12 +62,19 @@ export function getPaths(env: NodeJS.ProcessEnv = process.env): Paths {
     serverEntry: join(repoRoot, 'packages', 'server', 'dist', 'index.js'),
     webDist: join(repoRoot, 'packages', 'web', 'dist'),
     hookSource: resolve(here, '..', 'hook', 'agent-office-hook.mjs'),
+    sounds: join(repoRoot, 'packages', 'server', 'assets', 'sounds'),
   };
 }
 
+/** `voice` fala o texto; `siren` e `beep` tocam um som. */
+export type AlertSound = 'voice' | 'siren' | 'beep';
+export const ALERT_SOUNDS: readonly AlertSound[] = ['voice', 'siren', 'beep'];
+
 export interface VoiceAlertConfig {
   enabled: boolean;
-  /** O que falar (normalmente o seu nome). */
+  /** O que tocar. Ausente = `voice`. */
+  sound?: AlertSound;
+  /** O que falar (normalmente o seu nome) quando `sound` é `voice`. */
   text: string;
   /** Segundos entre repetições. */
   everySec?: number;

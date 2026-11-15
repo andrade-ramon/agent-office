@@ -1,17 +1,27 @@
 import { execFileSync } from 'node:child_process';
-import { readConfig, writeConfig, type Paths, type VoiceAlertConfig } from './paths.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { ALERT_SOUNDS, readConfig, writeConfig, type AlertSound, type Paths, type VoiceAlertConfig } from './paths.js';
 
 export interface AlertOptions {
+  sound?: AlertSound;
   text?: string;
   voice?: string;
   everySec?: number;
   delaySec?: number;
 }
 
+const SOUND_LABEL: Record<Exclude<AlertSound, 'voice'>, string> = { siren: 'a sirene', beep: 'o bipe' };
+
+export function isAlertSound(value: unknown): value is AlertSound {
+  return ALERT_SOUNDS.includes(value as AlertSound);
+}
+
 export function currentAlert(paths: Paths): VoiceAlertConfig {
   const v = readConfig(paths).voiceAlert;
   return {
     enabled: v?.enabled === true,
+    ...(isAlertSound(v?.sound) && v.sound !== 'voice' ? { sound: v.sound } : {}),
     text: typeof v?.text === 'string' ? v.text : '',
     ...(v?.everySec ? { everySec: v.everySec } : {}),
     ...(v?.delaySec !== undefined ? { delaySec: v.delaySec } : {}),
@@ -19,14 +29,18 @@ export function currentAlert(paths: Paths): VoiceAlertConfig {
   };
 }
 
-/** Liga (ou ajusta) o alerta por voz no config.json. O servidor relê o arquivo sozinho. */
+/** Liga (ou ajusta) o alerta sonoro no config.json. O servidor relê o arquivo sozinho. */
 export function enableAlert(paths: Paths, opts: AlertOptions): { ok: boolean; detail: string; alert?: VoiceAlertConfig } {
   const config = readConfig(paths);
   const prev = currentAlert(paths);
+  const sound = opts.sound ?? prev.sound ?? 'voice';
   const text = (opts.text ?? prev.text).trim();
-  if (!text) return { ok: false, detail: 'informe o que falar, por exemplo: agent-office alert on "Seu nome"' };
+  if (sound === 'voice' && !text) {
+    return { ok: false, detail: 'informe o que falar (agent-office alert on "Seu nome") ou escolha um som (--sound siren)' };
+  }
   const alert: VoiceAlertConfig = {
     enabled: true,
+    ...(sound !== 'voice' ? { sound } : {}),
     text,
     everySec: opts.everySec && opts.everySec >= 2 ? opts.everySec : (prev.everySec ?? 8),
     delaySec: opts.delaySec !== undefined && opts.delaySec >= 0 ? opts.delaySec : (prev.delaySec ?? 3),
@@ -43,7 +57,12 @@ export function disableAlert(paths: Paths): void {
 
 export function describeAlert(a: VoiceAlertConfig): string {
   if (!a.enabled) return 'desligado';
-  return `fala "${a.text}" a cada ${a.everySec ?? 8}s${a.voice ? ` (voz ${a.voice})` : ''} enquanto houver decisão pendente`;
+  const every = `a cada ${a.everySec ?? 8}s`;
+  const what =
+    a.sound && a.sound !== 'voice'
+      ? `toca ${SOUND_LABEL[a.sound]} ${every}`
+      : `fala "${a.text}" ${every}${a.voice ? ` (voz ${a.voice})` : ''}`;
+  return `${what} enquanto houver decisão pendente`;
 }
 
 /** Fala uma vez agora, para conferir volume e voz. */
@@ -64,6 +83,32 @@ export function speakOnce(text: string, voice?: string): boolean {
         execFileSync('spd-say', ['-w', phrase], { stdio: 'ignore', timeout: 15_000 });
       } catch {
         execFileSync('espeak', [phrase], { stdio: 'ignore', timeout: 15_000 });
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Toca o som uma vez agora, para conferir o volume. */
+export function playOnce(paths: Paths, sound: Exclude<AlertSound, 'voice'>): boolean {
+  const file = join(paths.sounds, `${sound}.wav`);
+  if (!existsSync(file)) return false;
+  try {
+    if (process.platform === 'darwin') {
+      execFileSync('afplay', [file], { stdio: 'ignore', timeout: 15_000 });
+    } else if (process.platform === 'win32') {
+      execFileSync(
+        'powershell',
+        ['-NoProfile', '-Command', `(New-Object System.Media.SoundPlayer '${file.replace(/'/g, "''")}').PlaySync()`],
+        { stdio: 'ignore', timeout: 15_000 },
+      );
+    } else {
+      try {
+        execFileSync('paplay', [file], { stdio: 'ignore', timeout: 15_000 });
+      } catch {
+        execFileSync('aplay', ['-q', file], { stdio: 'ignore', timeout: 15_000 });
       }
     }
     return true;

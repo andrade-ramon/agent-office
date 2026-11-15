@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { voiceAlertReader } from '../src/config.js';
 import { needsDecision, type EventType, type NormalizedEvent } from '../src/schema.js';
 import { SessionStore } from '../src/state.js';
-import { cleanSpeech, VoiceAlert, type VoiceAlertSettings } from '../src/voice-alert.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { cleanSpeech, soundFile, VoiceAlert, type VoiceAlertSettings } from '../src/voice-alert.js';
 
 const T0 = 1_700_000_000_000;
 
@@ -36,8 +37,8 @@ describe('alerta por voz', () => {
     alert = new VoiceAlert(
       store,
       () => settings,
-      async (text, voice) => {
-        spoken.push(`${text}|${voice ?? ''}`);
+      async (s) => {
+        spoken.push(s.sound && s.sound !== 'voice' ? s.sound : `${s.text}|${s.voice ?? ''}`);
       },
       () => now,
     );
@@ -121,6 +122,32 @@ describe('alerta por voz', () => {
     expect(await first).toBe(true);
   });
 
+  it('sirene: toca sem precisar de texto e repete até a decisão', async () => {
+    settings = { enabled: true, sound: 'siren', text: '', everySec: 15, delaySec: 3 };
+    expect(alert.status()).toEqual({ enabled: true, pending: 0 });
+    store.apply(ev('permission_wait', T0));
+    now = T0 + 3100;
+    expect(await alert.tick()).toBe(true);
+    now = T0 + 10_000;
+    expect(await alert.tick()).toBe(false); // repete só a cada 15 s
+    now = T0 + 18_200;
+    expect(await alert.tick()).toBe(true);
+    expect(spoken).toEqual(['siren', 'siren']);
+
+    store.apply(ev('stop', T0 + 19_000));
+    now = T0 + 40_000;
+    expect(await alert.tick()).toBe(false);
+  });
+
+  it('os sons são arquivos WAV gerados no repositório', () => {
+    for (const sound of ['siren', 'beep'] as const) {
+      const file = soundFile(sound);
+      expect(existsSync(file)).toBe(true);
+      const head = readFileSync(file).subarray(0, 12).toString('latin1');
+      expect(head.slice(0, 4) + head.slice(8)).toBe('RIFFWAVE');
+    }
+  });
+
   it('limpa o texto falado', () => {
     expect(cleanSpeech('  Ramon\n\tvem cá  ')).toBe('Ramon vem cá');
     expect(cleanSpeech('x'.repeat(200))).toHaveLength(80);
@@ -145,6 +172,10 @@ describe('voiceAlertReader', () => {
     await new Promise((r) => setTimeout(r, 15));
     writeFileSync(join(dir, 'config.json'), JSON.stringify({ port: 4747, voiceAlert: { enabled: false, text: 'Ramon' } }));
     expect(read()).toMatchObject({ enabled: false, text: 'Ramon', everySec: 8 });
+
+    await new Promise((r) => setTimeout(r, 15));
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ voiceAlert: { enabled: true, sound: 'siren', text: 'Ramon' } }));
+    expect(read()).toMatchObject({ enabled: true, sound: 'siren' });
 
     await new Promise((r) => setTimeout(r, 15));
     writeFileSync(join(dir, 'config.json'), '{ lixo');

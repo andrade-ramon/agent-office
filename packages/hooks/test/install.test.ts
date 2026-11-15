@@ -354,6 +354,20 @@ describe('alerta por voz (config)', () => {
     // religar sem repetir o texto
     expect(enableAlert(paths, {}).alert).toMatchObject({ enabled: true, text: 'Ramon' });
   });
+
+  it('troca a voz por sirene e volta, sem perder texto, voz e intervalo', () => {
+    writeConfig(paths, { port: 4800 });
+    // som escolhido: não precisa de texto
+    expect(enableAlert(paths, { sound: 'siren' })).toMatchObject({ ok: true, alert: { enabled: true, sound: 'siren', text: '' } });
+    expect(describeAlert(currentAlert(paths))).toBe('toca a sirene a cada 8s enquanto houver decisão pendente');
+
+    enableAlert(paths, { sound: 'voice', text: 'Ramon', voice: 'Luciana', everySec: 15 });
+    expect(currentAlert(paths).sound).toBeUndefined();
+    const siren = enableAlert(paths, { sound: 'siren' }).alert;
+    expect(siren).toMatchObject({ sound: 'siren', text: 'Ramon', voice: 'Luciana', everySec: 15 });
+    expect(enableAlert(paths, { sound: 'beep' }).detail).toContain('toca o bipe a cada 15s');
+    expect(describeAlert(enableAlert(paths, { sound: 'voice' }).alert!)).toContain('fala "Ramon" a cada 15s (voz Luciana)');
+  });
 });
 
 describe('inicialização automática', () => {

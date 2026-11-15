@@ -223,7 +223,7 @@ export interface HealthResponse {
   lastHookAt: { claude: number | null; codex: number | null };
   watcher: { enabled: boolean; claudeFiles: number; codexFiles: number; tracked: number };
   webBuilt: boolean;
-  /** Alerta por voz: ligado? quantas sessões aguardam decisão agora? */
+  /** Alerta sonoro: ligado? quantas sessões aguardam decisão agora? */
   voiceAlert: { enabled: boolean; pending: number };
 }
 
