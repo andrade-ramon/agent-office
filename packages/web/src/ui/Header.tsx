@@ -18,6 +18,9 @@ interface Props {
   /** Notifica também quando um turno termina. */
   notifyDone: boolean;
   fullscreen: boolean;
+  /** O navegador oferece instalar como app (Chrome/Edge, ainda não instalado). */
+  installable: boolean;
+  onInstall(): void;
   onAttention(): void;
   onToggleLabels(): void;
   onToggleNotify(): void;
@@ -83,6 +86,12 @@ export function Header(p: Props): ReactElement {
       )}
 
       <div className="toolbar">
+        {p.installable && (
+          <button type="button" className="tool wide" onClick={p.onInstall} title="Instalar como app neste computador">
+            <Icon name="install" />
+            <span className="tool-text">Instalar app</span>
+          </button>
+        )}
         <button
           type="button"
           className={`tool ${p.labels ? 'on' : ''}`}

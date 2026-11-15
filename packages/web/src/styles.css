@@ -1270,7 +1270,8 @@ ul {
     --sidebar-eff: min(var(--sidebar-w, 224px), 26vw);
     --detail-eff: min(var(--detail-w, 320px), 40vw);
   }
-  .attention-text {
+  .attention-text,
+  .tool-text {
     display: none;
   }
 }

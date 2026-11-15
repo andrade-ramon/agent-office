@@ -19,6 +19,7 @@ import {
   setTitle,
   showNotification,
 } from './notify';
+import { canInstall, promptInstall, setAppBadge, subscribeInstall } from './pwa';
 import { DETAIL_WIDTH, loadPrefs, savePrefs, SIDEBAR_WIDTH, type AgentFilter, type Prefs } from './prefs';
 import { Resizer } from './ui/Resizer';
 import type { OfficeStore } from './store';
@@ -40,6 +41,7 @@ let toastSeq = 0;
 
 export function App({ store }: { store: OfficeStore }): ReactElement {
   const state = useSyncExternalStore(store.subscribe, store.getState);
+  const installable = useSyncExternalStore(subscribeInstall, canInstall);
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [camera, setCamera] = useState<CameraInfo | null>(null);
@@ -130,6 +132,12 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
     }
   }, [toast]);
 
+  const install = useCallback(() => {
+    void promptInstall().then((accepted) => {
+      if (accepted) toast('Agent Office instalado — procure o ícone no Dock ou no Launchpad.', 'ok');
+    });
+  }, [toast]);
+
   const cycleNotify = useCallback(async () => {
     const p = prefsRef.current;
     if (p.notify && p.notifyDone) {
@@ -173,6 +181,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
   useEffect(() => {
     setTitle(attention.length);
     setFavicon(attention.length > 0);
+    setAppBadge(attention.length);
   }, [attention.length]);
 
   useEffect(() => {
@@ -257,6 +266,8 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
           notify={notifyOn}
           notifyDone={notifyOn && prefs.notifyDone}
           fullscreen={fullscreen}
+          installable={installable}
+          onInstall={install}
           onAttention={goAttention}
           onToggleLabels={() => update({ labels: !prefs.labels })}
           onToggleNotify={() => void cycleNotify()}

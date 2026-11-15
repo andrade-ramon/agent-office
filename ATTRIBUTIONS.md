@@ -2,7 +2,7 @@
 
 ## Arte e sprites
 
-**Toda a arte do agent-office é gerada proceduralmente em código** — cenário, móveis, personagens, balões e ícones são desenhados em tempo de execução pelo front-end (`packages/web/src`) e convertidos em texturas. O repositório não contém nem baixa imagens, spritesheets, fontes ou áudio de terceiros.
+**Toda a arte do agent-office é gerada proceduralmente em código** — cenário, móveis, personagens, balões e ícones são desenhados em tempo de execução pelo front-end (`packages/web/src`) e convertidos em texturas. O repositório não contém nem baixa imagens, spritesheets, fontes ou áudio de terceiros. Os ícones do web app (`packages/web/public/icons`) também são gerados por código: `node packages/web/scripts/make-icons.mjs`.
 
 Por ser código original deste projeto, a arte está coberta pela mesma licença [MIT](LICENSE).
 

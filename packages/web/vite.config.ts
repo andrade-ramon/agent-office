@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { serviceWorkerPlugin } from './sw-plugin';
 
 /** Porta do servidor agent-office usada pelo proxy em desenvolvimento. */
 const port = process.env.AGENT_OFFICE_PORT ?? '4747';
@@ -8,6 +9,7 @@ const target = `http://127.0.0.1:${port}`;
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: '/',
+  plugins: [serviceWorkerPlugin()],
   resolve: {
     alias: {
       '@agent-office/server/schema': fileURLToPath(new URL('../server/src/schema.ts', import.meta.url)),

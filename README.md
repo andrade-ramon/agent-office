@@ -60,6 +60,21 @@ Abra **http://localhost:4747**.
 | `agent-office fix-settings` | Corrige problemas conhecidos do `~/.claude/settings.json` que fazem o Claude Code ignorar o arquivo. |
 | `agent-office uninstall` | `disconnect` + remove o serviço. `--purge` apaga `~/.agent-office`. |
 
+### Instalar como app
+
+A interface é um web app instalável (PWA): ganha ícone próprio no Dock e no Launchpad e abre em janela própria, sem abas nem barra de endereço.
+
+- **Chrome / Edge**: abra `http://localhost:4747` e clique em **Instalar app** no topo da página (ou no ícone de instalação da barra de endereço).
+- **Safari** (macOS 14+): abra `http://localhost:4747` e use **Arquivo → Adicionar ao Dock**.
+
+Depois de instalado:
+
+- o **número no ícone do Dock** mostra quantas sessões estão aguardando você;
+- a janela abre mesmo com o servidor parado (mostra "Servidor fora do ar" e reconecta sozinha quando ele volta);
+- a cada `npm run build` o app se atualiza na próxima abertura — não é preciso reinstalar.
+
+Instale sempre pelo mesmo endereço (`localhost`, não `127.0.0.1`): para o navegador são apps diferentes. Para remover, use **Desinstalar** no menu ⋮ da janela do app (Chrome) ou apague o app da pasta Aplicativos (Safari).
+
 ### Alerta por voz
 
 Para não deixar um agente parado esperando você, o servidor pode **chamar seu nome em voz alta** e repetir até você decidir:
@@ -173,6 +188,7 @@ O script de hook (`~/.agent-office/bin/agent-office-hook`) é **fail-open**:
 - **Assunto da sessão**: a única informação derivada do conteúdo é o título curto (até 90 caracteres) que o próprio agente dá à sessão — o mesmo que aparece na barra lateral do Claude ou do Codex — e a descrição curta da tarefa de um subagente. Fica só na sua máquina, em memória (não vai para o SQLite). Para não exibir nem isso, use `"titles": false` em `~/.agent-office/config.json` e reinicie o servidor.
 - O watcher lê os transcripts localmente apenas para classificar cada linha (é um prompt? uma chamada de ferramenta?). Nenhum conteúdo é guardado, transmitido ao navegador ou gravado no SQLite.
 - O histórico (`~/.agent-office/agent-office.db`) guarda eventos e contagens por 30 dias. Nada mais.
+- O app instalado guarda no cache do navegador apenas os arquivos da interface (HTML, JS, CSS); `/api`, `/events` e `/ws` nunca passam pelo service worker.
 - Não há telemetria, CDN, fontes remotas nem qualquer requisição para fora.
 
 ## Sobre os hooks de cada agente

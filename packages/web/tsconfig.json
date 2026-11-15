@@ -19,5 +19,5 @@
       "@agent-office/server/schema": ["../server/src/schema.ts"]
     }
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": ["src", "test", "vite.config.ts", "sw-plugin.ts"]
 }

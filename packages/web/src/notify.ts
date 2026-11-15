@@ -94,6 +94,6 @@ export function setFavicon(attention: boolean): void {
 }
 
 export function setTitle(attention: number): void {
-  const title = attention > 0 ? `(${attention}) agent-office` : 'agent-office';
+  const title = attention > 0 ? `(${attention}) Agent Office` : 'Agent Office';
   if (document.title !== title) document.title = title;
 }

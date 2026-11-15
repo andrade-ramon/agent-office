@@ -243,12 +243,16 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
     await fastify.register(fastifyStatic, {
       root: opts.webDir,
       setHeaders(res, path) {
-        if (path.endsWith('index.html')) res.header('Cache-Control', 'no-cache');
+        if (path.endsWith('index.html') || path.endsWith('sw.js')) res.header('Cache-Control', 'no-cache');
         else if (/[\\/]assets[\\/]/.test(path)) res.header('Cache-Control', 'public, max-age=31536000, immutable');
       },
     });
     fastify.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/events')) {
+      // Só rotas "de página" caem no index.html; um arquivo que não existe é 404
+      // (senão o service worker guardaria HTML no lugar de um JS/CSS antigo).
+      const path = req.url.split('?')[0] ?? '';
+      const page = !/\.[a-z0-9]+$/i.test(path) && !path.startsWith('/api/') && !path.startsWith('/events');
+      if (req.method === 'GET' && page) {
         return reply.header('Cache-Control', 'no-cache').sendFile('index.html');
       }
       return reply.code(404).send({ error: 'não encontrado' });
