@@ -84,12 +84,22 @@ export interface VoiceAlertConfig {
   voice?: string;
 }
 
+/** Sessões do Codex que rodam na nuvem (consultadas pela CLI do Codex). */
+export interface CodexCloudConfig {
+  enabled: boolean;
+  /** Caminho da CLI do Codex usada na consulta. */
+  bin?: string;
+  /** Segundos entre consultas. */
+  everySec?: number;
+}
+
 export interface OfficeConfig {
   port: number;
   idleAfterMin?: number;
   endAfterMin?: number;
   titles?: boolean;
   voiceAlert?: VoiceAlertConfig;
+  codexCloud?: CodexCloudConfig;
 }
 
 export function readConfig(paths: Paths): OfficeConfig {

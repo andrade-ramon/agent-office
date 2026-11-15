@@ -26,12 +26,11 @@ export interface VoiceAlertConfig {
 }
 
 /**
- * Lê a seção "voiceAlert" do config.json. Relê o arquivo só quando ele muda,
- * para que `agent-office alert on/off` valha sem reiniciar o servidor.
+ * Lê uma seção do config.json. Relê o arquivo só quando ele muda, para que os
+ * comandos da CLI (`alert on/off`, `cloud on/off`) valham sem reiniciar o servidor.
  */
-export function voiceAlertReader(home: string = officeHome()): () => VoiceAlertConfig {
+function sectionReader<T>(home: string, key: string, off: T, parse: (o: Record<string, unknown>) => T): () => T {
   const file = join(home, 'config.json');
-  const off: VoiceAlertConfig = { enabled: false, text: '', everySec: 8, delaySec: 3 };
   let cached = off;
   let mtimeMs = -1;
   return () => {
@@ -40,23 +39,42 @@ export function voiceAlertReader(home: string = officeHome()): () => VoiceAlertC
       if (st.mtimeMs === mtimeMs) return cached;
       mtimeMs = st.mtimeMs;
       const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
-      const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).voiceAlert : undefined;
-      if (!v || typeof v !== 'object') return (cached = off);
-      const o = v as Record<string, unknown>;
-      cached = {
-        enabled: o.enabled === true,
-        ...(o.sound === 'siren' || o.sound === 'beep' ? { sound: o.sound } : {}),
-        text: typeof o.text === 'string' ? o.text : '',
-        everySec: positive(o.everySec) ?? off.everySec,
-        delaySec: typeof o.delaySec === 'number' && o.delaySec >= 0 ? o.delaySec : off.delaySec,
-        ...(typeof o.voice === 'string' && o.voice ? { voice: o.voice } : {}),
-      };
+      const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>)[key] : undefined;
+      cached = v && typeof v === 'object' ? parse(v as Record<string, unknown>) : off;
       return cached;
     } catch {
       mtimeMs = -1;
       return (cached = off);
     }
   };
+}
+
+export function voiceAlertReader(home: string = officeHome()): () => VoiceAlertConfig {
+  const off: VoiceAlertConfig = { enabled: false, text: '', everySec: 8, delaySec: 3 };
+  return sectionReader(home, 'voiceAlert', off, (o) => ({
+    enabled: o.enabled === true,
+    ...(o.sound === 'siren' || o.sound === 'beep' ? { sound: o.sound } : {}),
+    text: typeof o.text === 'string' ? o.text : '',
+    everySec: positive(o.everySec) ?? off.everySec,
+    delaySec: typeof o.delaySec === 'number' && o.delaySec >= 0 ? o.delaySec : off.delaySec,
+    ...(typeof o.voice === 'string' && o.voice ? { voice: o.voice } : {}),
+  }));
+}
+
+export interface CodexCloudConfig {
+  enabled: boolean;
+  bin: string;
+  everySec: number;
+}
+
+/** Seção "codexCloud": sessões do Codex que rodam na nuvem (opcional). */
+export function codexCloudReader(home: string = officeHome()): () => CodexCloudConfig {
+  const off: CodexCloudConfig = { enabled: false, bin: '', everySec: 30 };
+  return sectionReader(home, 'codexCloud', off, (o) => ({
+    enabled: o.enabled === true,
+    bin: typeof o.bin === 'string' ? o.bin : '',
+    everySec: positive(o.everySec) ?? off.everySec,
+  }));
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {

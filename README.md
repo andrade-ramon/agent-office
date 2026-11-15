@@ -56,6 +56,7 @@ Abra **http://localhost:4747**.
 | `agent-office open` | Abre a interface no navegador. |
 | `agent-office service install\|uninstall\|status\|restart` | Inicialização automática (launchd no macOS, `systemd --user` no Linux, Tarefa Agendada no Windows). |
 | `agent-office alert on --sound siren` | Liga o alerta sonoro: sirene, bipe ou seu nome em voz alta (veja abaixo). `off`, `test` e `status` completam. |
+| `agent-office cloud on` | Mostra também as tarefas do Codex que rodam na nuvem (veja abaixo). `off` e `status` completam. |
 | `agent-office doctor` | Diagnóstico completo, incluindo o teste de fail-open do hook. |
 | `agent-office fix-settings` | Corrige problemas conhecidos do `~/.claude/settings.json` que fazem o Claude Code ignorar o arquivo. |
 | `agent-office uninstall` | `disconnect` + remove o serviço. `--purge` apaga `~/.agent-office`. |
@@ -101,6 +102,23 @@ A configuração fica em `~/.agent-office/config.json` (`sound`: `siren`, `beep`
 
 > No Codex não há sinal de "permissão concedida": se você aprovar um comando demorado, o alerta pode continuar até o comando terminar. No Claude Code a retomada é detectada na hora.
 
+### Sessões na nuvem (Codex Cloud)
+
+Tarefas do Codex que rodam na nuvem (chatgpt.com/codex) não passam por hooks nem deixam arquivos nesta máquina. Para vê-las no escritório, ligue a consulta:
+
+```bash
+agent-office cloud on                # confere a CLI e o login do Codex e liga (vale na hora)
+agent-office cloud on --every 60     # intervalo entre consultas, em segundos (padrão 30, mínimo 10)
+agent-office cloud status
+agent-office cloud off               # as sessões da nuvem saem do escritório
+```
+
+- O servidor roda `codex cloud list --json` (recurso experimental da CLI do Codex) no intervalo configurado e transforma cada tarefa em um personagem na **bancada da nuvem**.
+- Aparecem as tarefas em andamento e as concluídas nos últimos 10 minutos. Da nuvem só vêm o estado (rodando, concluída, erro), o título, o ambiente e o tamanho da alteração — não há ferramenta atual nem uso de contexto.
+- **Duplo clique** (ou **Abrir no site**) abre a tarefa no navegador.
+- É a única parte do agent-office que faz uma requisição para fora da máquina: a consulta à sua própria conta, feita pela CLI oficial do Codex. Por isso vem desligada.
+- Sessões do Claude Code na nuvem ainda não aparecem: a CLI do Claude não lista essas sessões.
+
 ### Modo demo
 
 Para ver o escritório funcionando sem nenhum agente real:
@@ -131,6 +149,7 @@ O demo usa outra porta (4748), não lê seus transcripts e não grava histórico
 | Quadro branco | planejando (`plan`) |
 | Estação web | buscando ou navegando na web (`web`) |
 | Sala de reunião | subagentes e o agente que os delegou |
+| Bancada da nuvem | tarefas do Codex que rodam na nuvem (com `agent-office cloud on`) |
 | Copa | sessão ociosa (`idle`) |
 | Porta | sessões chegando e saindo |
 
@@ -191,7 +210,7 @@ O script de hook (`~/.agent-office/bin/agent-office-hook`) é **fail-open**:
 - O watcher lê os transcripts localmente apenas para classificar cada linha (é um prompt? uma chamada de ferramenta?). Nenhum conteúdo é guardado, transmitido ao navegador ou gravado no SQLite.
 - O histórico (`~/.agent-office/agent-office.db`) guarda eventos e contagens por 30 dias. Nada mais.
 - O app instalado guarda no cache do navegador apenas os arquivos da interface (HTML, JS, CSS); `/api`, `/events` e `/ws` nunca passam pelo service worker.
-- Não há telemetria, CDN, fontes remotas nem qualquer requisição para fora.
+- Não há telemetria, CDN nem fontes remotas. A única requisição para fora é opcional e vem desligada: com `agent-office cloud on`, o servidor consulta as tarefas da sua conta pela CLI do Codex (id, título, estado, ambiente e contagem de linhas alteradas).
 
 ## Sobre os hooks de cada agente
 

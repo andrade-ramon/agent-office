@@ -36,7 +36,7 @@ export const TOOL_CATEGORIES = [
 export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
 
 /** De onde o evento veio. */
-export type EventSource = 'hook' | 'watcher' | 'demo' | 'system';
+export type EventSource = 'hook' | 'watcher' | 'cloud' | 'demo' | 'system';
 
 /** Metadados opcionais (nunca conteúdo). */
 export interface EventMeta {
@@ -65,6 +65,18 @@ export interface EventMeta {
    * sessão, o invólucro visto pelo watcher é ignorado.
    */
   wrapper?: boolean;
+  /** A sessão roda na nuvem do agente (não nesta máquina). */
+  remote?: boolean;
+  /** Endereço da sessão remota no site do agente. */
+  url?: string;
+  /** Tamanho da alteração produzida por uma sessão remota. */
+  changes?: SessionChanges;
+}
+
+export interface SessionChanges {
+  files: number;
+  added: number;
+  removed: number;
 }
 
 export interface NormalizedEvent {
@@ -150,6 +162,11 @@ export interface SessionState {
   pid?: number;
   /** Processo confirmado vivo (quando o agente expõe essa informação). */
   alive?: boolean;
+  /** Sessão na nuvem do agente: sem diretório, processo ou ferramentas locais. */
+  remote?: boolean;
+  /** Onde abrir a sessão remota no navegador. */
+  url?: string;
+  changes?: SessionChanges;
   counts: { prompts: number; tools: number; errors: number };
   timeline: TimelineEntry[];
   sources: { hook: boolean; watcher: boolean };
@@ -225,6 +242,8 @@ export interface HealthResponse {
   webBuilt: boolean;
   /** Alerta sonoro: ligado? quantas sessões aguardam decisão agora? */
   voiceAlert: { enabled: boolean; pending: number };
+  /** Sessões do Codex na nuvem: ligado? quantas rodando? última consulta e erro. */
+  codexCloud: { enabled: boolean; running: number; lastOkAt: number | null; error: string | null };
 }
 
 export interface FocusResponse {

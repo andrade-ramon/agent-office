@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
+import { currentCloud, describeCloud, disableCloud, enableCloud } from './cloud.js';
 import { currentAlert, describeAlert, disableAlert, enableAlert, isAlertSound, playOnce, speakOnce } from './alert.js';
 import { runDoctor, type Level } from './doctor.js';
 import {
@@ -77,6 +78,9 @@ Uso: agent-office <comando> [opções]
                  on ["texto"] [--sound siren|beep|voice] [--voice <voz>]
                     [--every <seg>] [--delay <seg>]
                  off | test | status
+  cloud        mostra também as tarefas do Codex que rodam na nuvem (consulta
+               a sua conta pela CLI do Codex; desligado por padrão)
+                 on [--every <seg>] | off | status
   doctor       diagnóstico completo
   fix-settings corrige problemas conhecidos do ~/.claude/settings.json que fazem
                o Claude Code ignorar o arquivo (ex.: statusLine sem "type")
@@ -251,6 +255,11 @@ async function cmdStatus(paths: Paths): Promise<number> {
   );
   const alert = currentAlert(paths);
   if (alert.enabled) line('ok', 'Alerta sonoro', describeAlert(alert));
+  const cloud = currentCloud(paths);
+  if (cloud.enabled) {
+    const c = health?.codexCloud;
+    line(c?.error ? 'warn' : 'ok', 'Codex Cloud', c?.error ? `consulta falhando: ${c.error}` : describeCloud(cloud));
+  }
   if (health?.lastHookAt) {
     const fmt = (t: number | null): string => (t ? new Date(t).toLocaleTimeString() : 'nunca');
     console.log(dim(`\n  último hook recebido — Claude: ${fmt(health.lastHookAt.claude)} · Codex: ${fmt(health.lastHookAt.codex)}`));
@@ -383,6 +392,34 @@ async function cmdService(paths: Paths, args: string[]): Promise<number> {
   return 0;
 }
 
+async function cmdCloud(paths: Paths, args: string[]): Promise<number> {
+  const sub = args[0] ?? 'status';
+  const port = resolvePort(paths);
+  if (sub === 'on') {
+    const every = Number(option(args, '--every'));
+    const r = enableCloud(paths, every > 0 ? { everySec: every } : {});
+    line(r.ok ? 'ok' : 'fail', r.ok ? 'Codex Cloud ligado' : 'Codex Cloud', r.detail);
+    if (r.ok && !(await getHealth(port))) {
+      console.log(dim('      O servidor está parado; a consulta começa quando ele subir (agent-office start).'));
+    }
+    return r.ok ? 0 : 1;
+  }
+  if (sub === 'off') {
+    disableCloud(paths);
+    line('ok', 'Codex Cloud desligado', 'as sessões da nuvem saem do escritório');
+    return 0;
+  }
+  const cloud = currentCloud(paths);
+  line(cloud.enabled ? 'ok' : 'warn', 'Codex Cloud', describeCloud(cloud));
+  const c = (await getHealth(port))?.codexCloud;
+  if (cloud.enabled && c) {
+    const last = c.lastOkAt ? new Date(c.lastOkAt).toLocaleTimeString() : 'nunca';
+    console.log(dim(`      servidor: ${c.enabled ? 'ativo' : 'inativo'} · rodando agora: ${c.running} · última consulta: ${last}`));
+    if (c.error) console.log(dim(`      erro: ${c.error}`));
+  }
+  return 0;
+}
+
 async function cmdAlert(paths: Paths, args: string[]): Promise<number> {
   const sub = args[0] ?? 'status';
   const port = resolvePort(paths);
@@ -499,6 +536,8 @@ async function main(): Promise<number> {
       return cmdService(paths, args);
     case 'alert':
       return cmdAlert(paths, args);
+    case 'cloud':
+      return cmdCloud(paths, args);
     case 'doctor':
       return cmdDoctor(paths);
     case 'fix-settings': {

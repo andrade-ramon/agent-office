@@ -31,6 +31,7 @@ export type FurnitureKind =
   | 'console'
   | 'tower'
   | 'dish'
+  | 'uplink'
   | 'bench'
   | 'arcade'
   | 'copier'
@@ -64,7 +65,7 @@ export interface Rug {
   y: number;
   w: number;
   h: number;
-  style: 'web' | 'lounge' | 'library' | 'mat' | 'meeting';
+  style: 'web' | 'cloud' | 'lounge' | 'library' | 'mat' | 'meeting';
 }
 
 export interface Desk extends Slot {
@@ -128,6 +129,7 @@ const SOLID: ReadonlySet<FurnitureKind> = new Set<FurnitureKind>([
   'console',
   'tower',
   'dish',
+  'uplink',
   'bench',
   'arcade',
   'copier',
@@ -170,6 +172,7 @@ export function buildOffice(): OfficeLayout {
     web: [],
     copa: [],
     meeting: [],
+    cloud: [],
     door: [],
   };
 
@@ -372,6 +375,14 @@ export function buildOffice(): OfficeLayout {
   slot('web', 23, 21, 'up', 'stand', 'antenna', 1);
   for (let x = 20; x <= 22; x++) slot('web', x, 22, 'up', 'stand', 'watch', 2);
 
+  // ───────────── nuvem (sessões que rodam fora desta máquina) ─────────────
+  rugs.push({ x: 26, y: 19, w: 5, h: 5, style: 'cloud' });
+  put('uplink', 27, 20, 3, 1);
+  for (let x = 27; x <= 29; x++) slot('cloud', x, 21, 'up', 'stand', 'console');
+  slot('cloud', 26, 21, 'up', 'stand', 'watch', 1);
+  slot('cloud', 30, 21, 'up', 'stand', 'watch', 1);
+  for (let x = 27; x <= 29; x++) slot('cloud', x, 22, 'up', 'stand', 'watch', 2);
+
   // ───────────── sala de reunião (subagentes) ─────────────
   rugs.push({ x: 35, y: 4, w: 7, h: 4, style: 'meeting' });
   put('tableMeet', 36, 5, 5, 2);
@@ -473,6 +484,7 @@ export function buildOffice(): OfficeLayout {
     { x: 37.5, y: 14, radius: 4, color: 0xffe2a8 },
     { x: 37.5, y: 22, radius: 4, color: 0xffcf96 },
     { x: 21.5, y: 21, radius: 4, color: 0x8fe8ff },
+    { x: 28.5, y: 21, radius: 3.4, color: 0xcfe6ff },
     { x: 15, y: 25, radius: 3.4, color: 0xffe2a8 },
     { x: 29, y: 25, radius: 3.4, color: 0xffe2a8 },
   ];
@@ -486,6 +498,7 @@ export function buildOffice(): OfficeLayout {
     { text: 'Arquivo', hint: 'buscando', x: 2.7, y: 15.4 },
     { text: 'Estante', hint: 'lendo', x: 7.6, y: 15.4 },
     { text: 'Estação web', hint: 'web', x: 21.5, y: 24.3 },
+    { text: 'Nuvem', hint: 'sessões remotas', x: 28.5, y: 24.3 },
     { text: 'Copa', hint: 'ociosos', x: 38, y: 20.3 },
     { text: 'Bancada', hint: 'mesas extras', x: 15, y: 24.3 },
   ];
@@ -531,6 +544,7 @@ export function renderAscii(office: OfficeLayout): string {
     web: 'w',
     copa: 'c',
     meeting: 'm',
+    cloud: 'n',
     door: 'D',
   };
   for (const area of Object.keys(office.slots) as AreaId[]) {

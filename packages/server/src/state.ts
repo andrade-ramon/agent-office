@@ -438,6 +438,9 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
       if (title) s.title = title;
     }
     if (meta.alive !== undefined) s.alive = meta.alive;
+    if (meta.remote) s.remote = true;
+    if (meta.url) s.url = meta.url;
+    if (meta.changes) s.changes = meta.changes;
     if (meta.contextTokens || meta.contextWindow) {
       const tokens = meta.contextTokens ?? s.context?.tokens ?? 0;
       let window = meta.contextWindow ?? s.context?.window ?? defaultWindow(agent);

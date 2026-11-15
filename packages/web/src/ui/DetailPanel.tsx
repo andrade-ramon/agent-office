@@ -10,6 +10,7 @@ import {
   formatClock,
   formatDuration,
   formatNumber,
+  plural,
   formatTokens,
   sourceLabel,
 } from '../i18n';
@@ -32,6 +33,7 @@ interface Props {
 const SOURCE_TAG: Record<EventSource, string> = {
   hook: 'hook',
   watcher: 'arquivo',
+  cloud: 'nuvem',
   demo: 'demo',
   system: 'sistema',
 };
@@ -71,6 +73,7 @@ export function DetailPanel(p: Props): ReactElement {
           <div className="detail-tags">
             <span className={`agent-tag agent-${s.agent}`}>{AGENT_LABEL[s.agent]}</span>
             {s.parentKey && <span className="agent-tag sub">subagente</span>}
+            {s.remote && <span className="agent-tag cloud">nuvem</span>}
           </div>
         </div>
         <button type="button" className="tool" onClick={p.onClose} title="Fechar (Esc)" aria-label="Fechar">
@@ -95,23 +98,46 @@ export function DetailPanel(p: Props): ReactElement {
           <Icon name="target" size={12} />
           Focar
         </button>
-        <button type="button" className="btn" onClick={p.onFocusWindow} title="Traz o terminal ou app da sessão para a frente">
-          <Icon name="window" size={12} />
-          Abrir janela
-        </button>
+        {s.remote ? (
+          <button type="button" className="btn" onClick={p.onFocusWindow} disabled={!s.url} title="Abre a tarefa no site do Codex">
+            <Icon name="cloud" size={12} />
+            Abrir no site
+          </button>
+        ) : (
+          <button type="button" className="btn" onClick={p.onFocusWindow} title="Traz o terminal ou app da sessão para a frente">
+            <Icon name="window" size={12} />
+            Abrir janela
+          </button>
+        )}
       </div>
 
       <div className="detail-scroll">
         <dl className="fields">
           <Field label="Assunto">{s.title || <span className="muted">sem título</span>}</Field>
-          <Field label="Projeto">{s.project || '—'}</Field>
-          <Field label="Diretório" mono>
-            <span className="path" title={s.cwd}>
-              <bdi>{s.cwd || '—'}</bdi>
-            </span>
-          </Field>
+          <Field label={s.remote ? 'Ambiente' : 'Projeto'}>{s.project || '—'}</Field>
+          {s.remote && (
+            <Field label="Alterações">
+              {s.changes ? (
+                <span className="changes">
+                  {plural(s.changes.files, 'arquivo', 'arquivos')} <b className="plus">+{formatNumber(s.changes.added)}</b>{' '}
+                  <b className="minus">−{formatNumber(s.changes.removed)}</b>
+                </span>
+              ) : (
+                <span className="muted">ainda sem alterações</span>
+              )}
+            </Field>
+          )}
+          {!s.remote && (
+            <Field label="Diretório" mono>
+              <span className="path" title={s.cwd}>
+                <bdi>{s.cwd || '—'}</bdi>
+              </span>
+            </Field>
+          )}
           <Field label="Ferramenta">
-            {s.toolName || s.toolCategory ? (
+            {s.remote ? (
+              <span className="muted">não informada pela nuvem</span>
+            ) : s.toolName || s.toolCategory ? (
               <span className="tool-now">
                 {s.toolCategory && <Icon name={CATEGORY_ICON[s.toolCategory]} size={11} />}
                 <b>{s.toolName ?? '—'}</b>

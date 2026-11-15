@@ -106,6 +106,17 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
   // ───────────── ações ─────────────
   const focusWindow = useCallback(
     (key: string) => {
+      const session = store.getState().sessions.get(key);
+      if (session?.remote) {
+        // Sessão na nuvem: não há janela local; abre a tarefa no site do agente.
+        if (session.url && /^https:\/\//i.test(session.url)) {
+          window.open(session.url, '_blank', 'noopener');
+          toast('Abri a tarefa no site do Codex.', 'ok');
+        } else {
+          toast('Esta sessão da nuvem não tem link.', 'warn');
+        }
+        return;
+      }
       void store.focusWindow(key).then((res) => toast(res.detail, res.ok ? 'ok' : 'warn'));
     },
     [store, toast],

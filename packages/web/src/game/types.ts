@@ -17,6 +17,7 @@ export type AreaId =
   | 'web'
   | 'copa'
   | 'meeting'
+  | 'cloud'
   | 'door';
 
 export const AREA_IDS: readonly AreaId[] = [
@@ -28,6 +29,7 @@ export const AREA_IDS: readonly AreaId[] = [
   'web',
   'copa',
   'meeting',
+  'cloud',
   'door',
 ];
 

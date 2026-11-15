@@ -29,6 +29,18 @@ describe('targetFor (status → área)', () => {
     }
   });
 
+  it('sessões na nuvem ficam na bancada da nuvem, qualquer que seja a ferramenta', () => {
+    const remote = (status: SessionStatus): TargetInput => input({ status, remote: true, toolCategory: 'bash', toolName: 'Codex Cloud' });
+    expect(targetFor(remote('starting'))).toEqual({ area: 'cloud', activity: 'arrive' });
+    expect(targetFor(remote('working'))).toEqual({ area: 'cloud', activity: 'web' });
+    expect(targetFor(remote('thinking'))).toEqual({ area: 'cloud', activity: 'think' });
+    expect(targetFor(remote('done'))).toEqual({ area: 'cloud', activity: 'done' });
+    expect(targetFor(remote('error'))).toEqual({ area: 'cloud', activity: 'error' });
+    expect(targetFor(remote('idle')).area).toBe('copa');
+    expect(targetFor(remote('ended')).area).toBe('door');
+    expect(OFFICE.slots.cloud.length).toBeGreaterThanOrEqual(6);
+  });
+
   it('mapeia os status sem ferramenta', () => {
     expect(targetFor(input({ status: 'starting' }))).toEqual({ area: 'desk', activity: 'arrive' });
     expect(targetFor(input({ status: 'thinking' }))).toEqual({ area: 'desk', activity: 'think' });

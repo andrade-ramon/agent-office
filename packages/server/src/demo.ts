@@ -1,4 +1,5 @@
 import type { AgentKind, EventMeta, EventType, NormalizedEvent, ToolCategory } from './schema.js';
+import { CLOUD_ENTRYPOINT } from './codex-cloud.js';
 import type { SessionStore } from './state.js';
 
 const PROJECTS = ['loja-virtual', 'api-pagamentos', 'app-mobile', 'infra-cloud', 'site-docs', 'painel-admin', 'bot-suporte'];
@@ -105,6 +106,8 @@ export class DemoSimulator {
     for (let i = 0; i < this.concurrency; i++) {
       void this.lane(i);
     }
+    // Duas tarefas "na nuvem" por vez, para a bancada da nuvem não ficar vazia.
+    for (let i = 0; i < 2; i++) void this.cloudLane(i);
   }
 
   stop(): void {
@@ -194,6 +197,27 @@ export class DemoSimulator {
       await this.sleep(rand(600, 2000));
     }
     this.emit(child, 'subagent_stop');
+  }
+
+  private async cloudLane(index: number): Promise<void> {
+    await this.sleep(2000 + index * rand(6000, 12000));
+    while (!this.stopped) {
+      await this.cloudTask();
+      await this.sleep(rand(6000, 16000));
+    }
+  }
+
+  /** Tarefa do Codex Cloud: só se sabe que está rodando e, no fim, o tamanho da alteração. */
+  private async cloudTask(): Promise<void> {
+    const a: Actor = { agent: 'codex', sessionId: id('demo-cloud'), cwd: '', project: `demo/${pick(PROJECTS)}`, tokens: 0 };
+    const meta: EventMeta = { entrypoint: CLOUD_ENTRYPOINT, remote: true, title: pick(TITLES), url: 'https://chatgpt.com/codex' };
+    this.emit(a, 'session_start', {}, meta);
+    this.emit(a, 'tool_start', { toolName: CLOUD_ENTRYPOINT }, meta);
+    await this.sleep(rand(25_000, 60_000));
+    const changes = { files: Math.round(rand(1, 9)), added: Math.round(rand(8, 240)), removed: Math.round(rand(0, 90)) };
+    this.emit(a, 'stop', {}, { changes });
+    await this.sleep(rand(12_000, 22_000));
+    this.emit(a, 'session_end', {}, { reason: 'other' });
   }
 
   private async session(lane: number): Promise<void> {

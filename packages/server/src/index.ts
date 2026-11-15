@@ -15,7 +15,7 @@ process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
 }) as typeof process.emitWarning;
 
 const { createApp } = await import('./app.js');
-const { DEMO_PORT, HOST, loadConfig, officeHome, voiceAlertReader } = await import('./config.js');
+const { DEMO_PORT, HOST, codexCloudReader, loadConfig, officeHome, voiceAlertReader } = await import('./config.js');
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -107,6 +107,7 @@ const app = await createApp({
     titles: config.titles,
   },
   voiceAlert: { settings: voiceAlertReader(home) },
+  codexCloud: { settings: codexCloudReader(home) },
   log,
 });
 

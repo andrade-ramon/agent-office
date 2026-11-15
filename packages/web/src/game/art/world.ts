@@ -294,6 +294,15 @@ function drawRug(p: Painter, rug: Rug): void {
       p.ring(cx, cy, w / 2 - 20, h / 2 - 15, '#5fd0e0', 12);
       break;
     }
+    case 'cloud': {
+      const cx = X + w / 2 - 0.5;
+      const cy = Y + h / 2 - 0.5;
+      p.ellipse(cx, cy, w / 2 - 2, h / 2 - 2, '#33466f');
+      p.ellipse(cx, cy, w / 2 - 4, h / 2 - 4, '#4a6396');
+      p.ellipse(cx, cy, w / 2 - 10, h / 2 - 9, '#6d8cc0');
+      p.ring(cx, cy, w / 2 - 7, h / 2 - 7, '#cfe6ff', 10);
+      break;
+    }
     case 'lounge': {
       p.rect(X + 2, Y + 2, w - 4, h - 4, '#8f4b3c');
       p.rect(X + 4, Y + 4, w - 8, h - 8, '#b9684e');
@@ -757,6 +766,40 @@ function consoleSprite(): HTMLCanvasElement {
   });
 }
 
+/** Bancada da nuvem: dois monitores e um letreiro em forma de nuvem. */
+function uplinkSprite(): HTMLCanvasElement {
+  return makeSprite(46, 32, (p) => {
+    p.rect(0, 16, 46, 8, '#46557a').rect(0, 16, 46, 1, '#6a7da8');
+    p.rect(0, 24, 46, 7, '#2f3a58').rect(0, 24, 46, 1, '#cfe6ff').rect(0, 31, 46, 1, '#1d2438');
+    p.rect(1, 26, 2, 5, '#1d2438').rect(43, 26, 2, 5, '#1d2438');
+    for (let x = 6; x < 42; x += 6) p.px(x, 27, '#cfe6ff');
+    // monitores laterais: barras de progresso
+    for (const x of [2, 32]) {
+      p.rect(x, 8, 12, 9, '#1c2230').rect(x + 1, 9, 10, 6, '#12304a');
+      p.rect(x + 2, 10, 7, 1, '#9fd8ff').rect(x + 2, 12, 4, 1, '#6fe3a0').rect(x + 2, 14, 6, 1, '#ffd166');
+      p.rect(x + 2, 19, 8, 2, '#8a93a3');
+    }
+    // letreiro: uma nuvem sobre um poste
+    p.rect(22, 11, 2, 6, '#6f7d99').rect(19, 16, 8, 1, '#93a3c2');
+    p.bitmap(
+      15,
+      1,
+      [
+        '.....XXXX.......',
+        '...XXXXXXX.XXX..',
+        '..XXXXXXXXXXXXX.',
+        '.XXXXXXXXXXXXXXX',
+        'XXXXXXXXXXXXXXXX',
+        'XXXXXXXXXXXXXXXX',
+        'SXXXXXXXXXXXXXXS',
+        '.SSSSSSSSSSSSSS.',
+      ],
+      { X: '#f2f7ff', S: '#b9d6f5' },
+    );
+    p.px(20, 4, '#ffffff').px(21, 3, '#ffffff').px(27, 3, '#ffffff');
+  });
+}
+
 function globeSprites(): HTMLCanvasElement[] {
   const land = [
     ['..XX....', '.XXXX...', '.XXX....', '..X..XX.', '....XXX.', '.....X..'],
@@ -1169,6 +1212,8 @@ function specFor(f: Furniture): Spec | null {
       return { frame: 'tower', ax: 1, ay: 0, dz: 0 };
     case 'dish':
       return { frame: 'dish', ax: -1, ay: 0, dz: 0 };
+    case 'uplink':
+      return { frame: 'uplink', ax: 1, ay: 0, dz: 0 };
     case 'bench':
       return { frame: 'bench', ax: 0, ay: 0, dz: 0 };
     case 'arcade':
@@ -1210,6 +1255,7 @@ export function buildWorldArt(office: OfficeLayout): WorldArt {
   addAll('globe', globeSprites());
   atlas.add('tower', towerSprite());
   atlas.add('dish', dishSprite());
+  atlas.add('uplink', uplinkSprite());
   addAll('wave', waveSprites());
   atlas.add('bench', benchSprite());
   addAll('arcade', arcadeSprites());

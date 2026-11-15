@@ -29,6 +29,7 @@ export type IconName =
   | 'expand'
   | 'compact'
   | 'install'
+  | 'cloud'
   | 'sun'
   | 'moon'
   | 'clock'
@@ -224,6 +225,15 @@ export const ICONS: Record<IconName, readonly string[]> = {
     'X.....X',
     'X.....X',
     'XXX.XXX',
+  ],
+  cloud: [
+    '.......',
+    '...XX..',
+    '.XXXXX.',
+    'XXXXXXX',
+    'XXXXXXX',
+    '.......',
+    '.......',
   ],
   install: [
     '...X...',

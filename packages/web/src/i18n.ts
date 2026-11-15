@@ -103,6 +103,7 @@ export const TIME_MODE_LABEL: Record<TimeMode, string> = {
 };
 
 export function sourceLabel(s: SessionState, demo: boolean): string {
+  if (s.remote) return 'consulta à nuvem';
   const parts: string[] = [];
   if (s.sources.hook) parts.push('hooks');
   if (s.sources.watcher) parts.push('arquivo');
@@ -164,6 +165,7 @@ export function plural(n: number, one: string, many: string): string {
 export function describeActivity(s: SessionState): string {
   switch (s.status) {
     case 'working': {
+      if (s.remote) return 'rodando na nuvem';
       if (isDelegationTool(s.toolName)) return 'delegando a subagentes na sala de reunião';
       const cat = s.toolCategory ?? 'other';
       const tool = s.toolName ? `${s.toolName} ` : '';
@@ -174,12 +176,13 @@ export function describeActivity(s: SessionState): string {
     case 'waiting_input':
       return 'esperando sua resposta';
     case 'thinking':
+      if (s.remote) return 'na bancada da nuvem';
       if (s.parentKey) return 'na sala de reunião';
       return s.subagents > 0 ? 'em reunião com subagentes' : 'na própria mesa';
     case 'starting':
       return 'chegando ao escritório';
     case 'done':
-      return 'terminou o turno';
+      return s.remote ? 'tarefa concluída na nuvem' : 'terminou o turno';
     case 'error':
       return 'algo deu errado';
     case 'idle':
@@ -195,6 +198,7 @@ export function describeActivity(s: SessionState): string {
 export function shortActivity(s: SessionState): string {
   switch (s.status) {
     case 'working':
+      if (s.remote) return 'na nuvem';
       return s.toolName ?? CATEGORY_LABEL[s.toolCategory ?? 'other'];
     case 'permission_wait':
       return s.toolName ?? '';

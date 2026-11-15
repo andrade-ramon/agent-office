@@ -4,6 +4,7 @@ import { AGENT_LABEL, describeActivity, formatDuration, shortActivity } from '..
 import type { ListRow, ProjectCount } from '../model';
 import type { AgentFilter } from '../prefs';
 import { Avatar, StatusChip } from './bits';
+import { Icon } from './Icon';
 
 interface Props {
   rows: ListRow[];
@@ -56,12 +57,13 @@ function Row({
         className="row-button"
         onClick={() => onSelect(s.key)}
         onDoubleClick={() => onActivate(s.key)}
-        title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}${s.title ? `\n${s.title}` : ''}\n${describeActivity(s)}\nDuplo clique: trazer a janela para a frente`}
+        title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}${s.title ? `\n${s.title}` : ''}\n${describeActivity(s)}\nDuplo clique: ${s.remote ? 'abrir no site do Codex' : 'trazer a janela para a frente'}`}
       >
         <Avatar session={s} size={row.depth === 1 ? 24 : 32} />
         <span className="row-main">
           <span className="row-title">
             <span className="row-name">{s.label}</span>
+            {s.remote && <Icon name="cloud" size={9} className="row-cloud" />}
             <span className="row-project">{s.project}</span>
           </span>
           {s.title && <span className="row-subject">{s.title}</span>}

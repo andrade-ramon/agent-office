@@ -759,6 +759,19 @@ ul {
   background: var(--panel-3);
   color: var(--muted);
 }
+.agent-tag.cloud {
+  background: #cfe6ff;
+}
+.row-cloud {
+  flex: none;
+  color: #cfe6ff;
+}
+.changes .plus {
+  color: var(--ok);
+}
+.changes .minus {
+  color: var(--danger);
+}
 
 .detail-status {
   display: flex;

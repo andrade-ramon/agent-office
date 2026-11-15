@@ -23,6 +23,7 @@ import {
 } from './schema.js';
 import { SessionStore, type StoreOptions } from './state.js';
 import { isObj, num, projectFromCwd, str } from './util.js';
+import { CodexCloudWatcher, type CodexCloudSettings, type ListCloudTasks } from './codex-cloud.js';
 import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
 import { TranscriptWatcher } from './watcher.js';
 
@@ -48,6 +49,8 @@ export interface AppOptions {
   store?: Partial<StoreOptions>;
   /** Alerta sonoro enquanto houver decisão pendente (lido a cada passo, para valer sem reiniciar). */
   voiceAlert?: { settings: () => VoiceAlertSettings; play?: PlayAlert; intervalMs?: number };
+  /** Sessões do Codex na nuvem, consultadas pela CLI do Codex (opcional; lido a cada passo). */
+  codexCloud?: { settings: () => CodexCloudSettings; list?: ListCloudTasks; intervalMs?: number };
   tickMs?: number;
   log?: (msg: string) => void;
 }
@@ -219,6 +222,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       watcher: { enabled: Boolean(watcher), ...w },
       webBuilt,
       voiceAlert: voice?.status() ?? { enabled: false, pending: 0 },
+      codexCloud: cloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
     };
   });
 
@@ -301,6 +305,10 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   let codexTitles: CodexTitleWatcher | null = null;
   // No modo demo as sessões são simuladas: nada de chamar o usuário.
   const voice = opts.voiceAlert && !opts.demo ? new VoiceAlert(store, opts.voiceAlert.settings, opts.voiceAlert.play) : null;
+  const cloud =
+    opts.codexCloud && !opts.demo
+      ? new CodexCloudWatcher(store, opts.codexCloud.settings, opts.codexCloud.list, Date.now, log)
+      : null;
   let demo: DemoSimulator | null = null;
   const timers: NodeJS.Timeout[] = [];
 
@@ -371,6 +379,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       // enquanto a varredura inicial dos transcripts acontece.
       await startSources();
       voice?.start(opts.voiceAlert?.intervalMs);
+      cloud?.start(opts.codexCloud?.intervalMs);
       return port;
     },
     async close() {
@@ -379,6 +388,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       procs?.stop();
       codexTitles?.stop();
       voice?.stop();
+      cloud?.stop();
       await watcher?.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

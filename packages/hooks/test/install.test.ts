@@ -23,6 +23,7 @@ import {
   versionGte,
 } from '../src/install.js';
 import { currentAlert, describeAlert, disableAlert, enableAlert } from '../src/alert.js';
+import { currentCloud, disableCloud, enableCloud } from '../src/cloud.js';
 import { getPaths, HOOK_MARKER, readConfig, writeConfig, type Paths } from '../src/paths.js';
 import { launchdPlist, systemdUnit, windowsTaskArgs, type ServiceSpec } from '../src/service.js';
 
@@ -396,5 +397,31 @@ describe('inicialização automática', () => {
     expect(unit).toContain('Restart=always');
     expect(unit).toContain('WantedBy=default.target');
     expect(windowsTaskArgs(spec)).toEqual(expect.arrayContaining(['/SC', 'ONLOGON', '/TN', 'agent-office']));
+  });
+});
+
+describe('codex cloud (config)', () => {
+  it('só liga quando a CLI existe e a consulta funciona; preserva o resto do config.json', () => {
+    writeConfig(paths, { port: 4800, voiceAlert: { enabled: true, text: 'Ramon' } });
+    expect(currentCloud(paths)).toEqual({ enabled: false });
+
+    expect(enableCloud(paths, {}, { bin: null })).toMatchObject({ ok: false, detail: expect.stringContaining('não encontrada') });
+    const denied = enableCloud(paths, {}, { bin: '/x/codex', probe: () => ({ ok: false, error: 'Not signed in' }) });
+    expect(denied).toMatchObject({ ok: false, detail: expect.stringContaining('Not signed in') });
+    expect(currentCloud(paths).enabled).toBe(false);
+
+    const on = enableCloud(paths, {}, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 0 }) });
+    expect(on).toMatchObject({ ok: true, cloud: { enabled: true, bin: '/x/codex', everySec: 30 } });
+    expect(on.detail).toBe('consulta o Codex Cloud a cada 30s · nenhuma tarefa na conta agora');
+    expect(readConfig(paths)).toMatchObject({ port: 4800, voiceAlert: { text: 'Ramon' }, codexCloud: { enabled: true, bin: '/x/codex' } });
+
+    // intervalo mínimo de 10 s; o valor anterior é mantido
+    expect(enableCloud(paths, { everySec: 60 }, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 2 }) }).detail).toBe(
+      'consulta o Codex Cloud a cada 60s · 2 tarefas na conta',
+    );
+    expect(enableCloud(paths, { everySec: 3 }, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 1 }) }).cloud?.everySec).toBe(60);
+
+    disableCloud(paths);
+    expect(readConfig(paths)).toMatchObject({ port: 4800, codexCloud: { enabled: false, bin: '/x/codex', everySec: 60 } });
   });
 });

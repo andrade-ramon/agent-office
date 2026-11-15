@@ -21,6 +21,7 @@ export interface Health {
   watcher: { enabled: boolean; claudeFiles: number; codexFiles: number; tracked: number };
   webBuilt: boolean;
   voiceAlert?: { enabled: boolean; pending: number };
+  codexCloud?: { enabled: boolean; running: number; lastOkAt: number | null; error: string | null };
 }
 
 export function httpGet(port: number, path: string, timeoutMs = 1500): Promise<{ status: number; body: string } | null> {

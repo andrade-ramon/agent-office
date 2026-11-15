@@ -30,7 +30,7 @@ export interface Target {
   activity: Activity;
 }
 
-export type TargetInput = Pick<SessionState, 'status' | 'toolCategory' | 'toolName' | 'parentKey' | 'subagents'>;
+export type TargetInput = Pick<SessionState, 'status' | 'toolCategory' | 'toolName' | 'parentKey' | 'subagents' | 'remote'>;
 
 /** Ferramentas de delegação: quem as usa vai para a sala de reunião. */
 export const DELEGATION_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task', 'spawn_agent']);
@@ -50,8 +50,12 @@ const CATEGORY_TARGET: Record<ToolCategory, { area: AreaId | 'home'; activity: A
   web: { area: 'web', activity: 'web' },
 };
 
-/** Área "base": mesa própria para sessões principais, sala de reunião para subagentes. */
-export function homeArea(s: Pick<SessionState, 'parentKey'>): AreaId {
+/**
+ * Área "base": mesa própria para sessões principais, sala de reunião para
+ * subagentes e a bancada da nuvem para sessões que rodam fora desta máquina.
+ */
+export function homeArea(s: Pick<SessionState, 'parentKey' | 'remote'>): AreaId {
+  if (s.remote) return 'cloud';
   return s.parentKey ? 'meeting' : 'desk';
 }
 
@@ -61,9 +65,12 @@ export function targetFor(s: TargetInput): Target {
     case 'starting':
       return { area: home, activity: 'arrive' };
     case 'thinking':
+      if (s.remote) return { area: 'cloud', activity: 'think' };
       if (s.parentKey || s.subagents > 0) return { area: 'meeting', activity: 'think' };
       return { area: 'desk', activity: 'think' };
     case 'working': {
+      // Na nuvem não sabemos qual ferramenta está em uso: só que a tarefa está rodando.
+      if (s.remote) return { area: 'cloud', activity: 'web' };
       if (isDelegationTool(s.toolName)) return { area: 'meeting', activity: 'meet' };
       const t = CATEGORY_TARGET[s.toolCategory ?? 'other'] ?? CATEGORY_TARGET.other;
       return { area: t.area === 'home' ? home : t.area, activity: t.activity };
