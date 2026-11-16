@@ -44,6 +44,13 @@ describe('ClaudeProcessWatcher (~/.claude/sessions/<pid>.json)', () => {
     expect(store.get('claude:morta')).toBeUndefined();
   });
 
+  it('ignora o processo da nossa própria consulta às sessões em nuvem', async () => {
+    write(process.pid, { sessionId: 'sonda', status: 'busy', cwd: '/private/var/folders/x/T/agent-office-cloud-probe' });
+    const watcher = new ClaudeProcessWatcher(dir, store);
+    await watcher.poll(now);
+    expect(store.size).toBe(0);
+  });
+
   it('encerra a sessão quando o arquivo do processo some', async () => {
     write(process.pid, { sessionId: 'viva', status: 'busy' });
     const watcher = new ClaudeProcessWatcher(dir, store);

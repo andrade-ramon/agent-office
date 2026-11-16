@@ -5,6 +5,13 @@ import { connect } from 'node:net';
 import { join } from 'node:path';
 import { ensureDirs, HOST, type Paths } from './paths.js';
 
+export interface CloudHealth {
+  enabled: boolean;
+  running: number;
+  lastOkAt: number | null;
+  error: string | null;
+}
+
 export interface Health {
   ok: boolean;
   name: string;
@@ -21,7 +28,8 @@ export interface Health {
   watcher: { enabled: boolean; claudeFiles: number; codexFiles: number; tracked: number };
   webBuilt: boolean;
   voiceAlert?: { enabled: boolean; pending: number };
-  codexCloud?: { enabled: boolean; running: number; lastOkAt: number | null; error: string | null };
+  codexCloud?: CloudHealth;
+  claudeCloud?: CloudHealth;
 }
 
 export function httpGet(port: number, path: string, timeoutMs = 1500): Promise<{ status: number; body: string } | null> {

@@ -111,7 +111,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
         // Sessão na nuvem: não há janela local; abre a tarefa no site do agente.
         if (session.url && /^https:\/\//i.test(session.url)) {
           window.open(session.url, '_blank', 'noopener');
-          toast('Abri a tarefa no site do Codex.', 'ok');
+          toast(`Abri no site do ${session.agent === 'codex' ? 'Codex' : 'Claude'}.`, 'ok');
         } else {
           toast('Esta sessão da nuvem não tem link.', 'warn');
         }

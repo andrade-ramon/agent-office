@@ -184,7 +184,8 @@ export function needsAttention(status: SessionStatus): boolean {
  */
 export function needsDecision(s: Pick<SessionState, 'status' | 'attentionReason'>): boolean {
   if (s.status === 'permission_wait') return true;
-  return s.status === 'waiting_input' && s.attentionReason !== 'idle_prompt';
+  // "already_waiting": sessão em nuvem que já esperava quando a vimos — sem data, pode ser antiga.
+  return s.status === 'waiting_input' && s.attentionReason !== 'idle_prompt' && s.attentionReason !== 'already_waiting';
 }
 
 export function sessionKey(agent: AgentKind, sessionId: string): string {
@@ -242,8 +243,16 @@ export interface HealthResponse {
   webBuilt: boolean;
   /** Alerta sonoro: ligado? quantas sessões aguardam decisão agora? */
   voiceAlert: { enabled: boolean; pending: number };
-  /** Sessões do Codex na nuvem: ligado? quantas rodando? última consulta e erro. */
-  codexCloud: { enabled: boolean; running: number; lastOkAt: number | null; error: string | null };
+  /** Sessões na nuvem de cada agente: ligado? quantas rodando? última consulta e erro. */
+  codexCloud: RemoteSourceHealth;
+  claudeCloud: RemoteSourceHealth;
+}
+
+export interface RemoteSourceHealth {
+  enabled: boolean;
+  running: number;
+  lastOkAt: number | null;
+  error: string | null;
 }
 
 export interface FocusResponse {

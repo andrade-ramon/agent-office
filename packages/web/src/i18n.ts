@@ -182,7 +182,7 @@ export function describeActivity(s: SessionState): string {
     case 'starting':
       return 'chegando ao escritório';
     case 'done':
-      return s.remote ? 'tarefa concluída na nuvem' : 'terminou o turno';
+      return s.remote ? 'parou na nuvem' : 'terminou o turno';
     case 'error':
       return 'algo deu errado';
     case 'idle':

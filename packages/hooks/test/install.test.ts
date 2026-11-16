@@ -400,28 +400,47 @@ describe('inicialização automática', () => {
   });
 });
 
-describe('codex cloud (config)', () => {
+describe('sessões em nuvem (config)', () => {
   it('só liga quando a CLI existe e a consulta funciona; preserva o resto do config.json', () => {
     writeConfig(paths, { port: 4800, voiceAlert: { enabled: true, text: 'Ramon' } });
     expect(currentCloud(paths)).toEqual({ enabled: false });
 
-    expect(enableCloud(paths, {}, { bin: null })).toMatchObject({ ok: false, detail: expect.stringContaining('não encontrada') });
-    const denied = enableCloud(paths, {}, { bin: '/x/codex', probe: () => ({ ok: false, error: 'Not signed in' }) });
+    expect(enableCloud(paths, 'codex', {}, { bin: null })).toMatchObject({ ok: false, detail: 'CLI do Codex não encontrada nesta máquina' });
+    const denied = enableCloud(paths, 'codex', {}, { bin: '/x/codex', probe: () => ({ ok: false, error: 'Not signed in' }) });
     expect(denied).toMatchObject({ ok: false, detail: expect.stringContaining('Not signed in') });
     expect(currentCloud(paths).enabled).toBe(false);
 
-    const on = enableCloud(paths, {}, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 0 }) });
+    const on = enableCloud(paths, 'codex', {}, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 0 }) });
     expect(on).toMatchObject({ ok: true, cloud: { enabled: true, bin: '/x/codex', everySec: 30 } });
     expect(on.detail).toBe('consulta o Codex Cloud a cada 30s · nenhuma tarefa na conta agora');
     expect(readConfig(paths)).toMatchObject({ port: 4800, voiceAlert: { text: 'Ramon' }, codexCloud: { enabled: true, bin: '/x/codex' } });
 
     // intervalo mínimo de 10 s; o valor anterior é mantido
-    expect(enableCloud(paths, { everySec: 60 }, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 2 }) }).detail).toBe(
+    expect(enableCloud(paths, 'codex', { everySec: 60 }, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 2 }) }).detail).toBe(
       'consulta o Codex Cloud a cada 60s · 2 tarefas na conta',
     );
-    expect(enableCloud(paths, { everySec: 3 }, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 1 }) }).cloud?.everySec).toBe(60);
+    expect(enableCloud(paths, 'codex', { everySec: 3 }, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 1 }) }).cloud?.everySec).toBe(60);
 
     disableCloud(paths);
     expect(readConfig(paths)).toMatchObject({ port: 4800, codexCloud: { enabled: false, bin: '/x/codex', everySec: 60 } });
+  });
+
+  it('Claude e Codex têm seções independentes', () => {
+    writeConfig(paths, { port: 4800 });
+    enableCloud(paths, 'codex', {}, { bin: '/x/codex', probe: () => ({ ok: true, tasks: 0 }) });
+    expect(enableCloud(paths, 'claude', {}, { bin: null })).toMatchObject({ ok: false, detail: 'CLI do Claude não encontrada nesta máquina' });
+
+    const on = enableCloud(paths, 'claude', {}, { bin: '/x/claude', probe: () => ({ ok: true, tasks: 2 }) });
+    expect(on).toMatchObject({ ok: true, cloud: { enabled: true, bin: '/x/claude', everySec: 60 } });
+    expect(on.detail).toBe('consulta o Claude Cloud a cada 60s · 2 sessões na conta');
+    // mínimo de 30 s para o Claude: cada consulta sobe um processo da CLI
+    expect(enableCloud(paths, 'claude', { everySec: 10 }, { bin: '/x/claude', probe: () => ({ ok: true, tasks: 1 }) }).cloud?.everySec).toBe(60);
+    expect(enableCloud(paths, 'claude', { everySec: 120 }, { bin: '/x/claude', probe: () => ({ ok: true, tasks: 1 }) }).detail).toBe(
+      'consulta o Claude Cloud a cada 120s · 1 sessão na conta',
+    );
+
+    disableCloud(paths, 'claude');
+    expect(currentCloud(paths, 'claude')).toEqual({ enabled: false, bin: '/x/claude', everySec: 120 });
+    expect(currentCloud(paths, 'codex')).toMatchObject({ enabled: true, bin: '/x/codex' });
   });
 });

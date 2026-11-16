@@ -1,4 +1,5 @@
 import type { AgentKind, EventMeta, EventType, NormalizedEvent, ToolCategory } from './schema.js';
+import { CLAUDE_CLOUD_ENTRYPOINT, CLAUDE_CLOUD_URL } from './claude-cloud.js';
 import { CLOUD_ENTRYPOINT } from './codex-cloud.js';
 import type { SessionStore } from './state.js';
 
@@ -202,20 +203,43 @@ export class DemoSimulator {
   private async cloudLane(index: number): Promise<void> {
     await this.sleep(2000 + index * rand(6000, 12000));
     while (!this.stopped) {
-      await this.cloudTask();
+      await this.cloudTask(index % 2 === 0 ? 'codex' : 'claude');
       await this.sleep(rand(6000, 16000));
     }
   }
 
-  /** Tarefa do Codex Cloud: só se sabe que está rodando e, no fim, o tamanho da alteração. */
-  private async cloudTask(): Promise<void> {
-    const a: Actor = { agent: 'codex', sessionId: id('demo-cloud'), cwd: '', project: `demo/${pick(PROJECTS)}`, tokens: 0 };
-    const meta: EventMeta = { entrypoint: CLOUD_ENTRYPOINT, remote: true, title: pick(TITLES), url: 'https://chatgpt.com/codex' };
+  /**
+   * Sessão na nuvem: só se sabe que está rodando. O Codex informa, no fim, o
+   * tamanho da alteração; o Claude pode parar para esperar uma resposta.
+   */
+  private async cloudTask(agent: AgentKind): Promise<void> {
+    const codex = agent === 'codex';
+    const entrypoint = codex ? CLOUD_ENTRYPOINT : CLAUDE_CLOUD_ENTRYPOINT;
+    const a: Actor = {
+      agent,
+      sessionId: id('demo-cloud'),
+      cwd: '',
+      project: codex ? `demo/${pick(PROJECTS)}` : entrypoint,
+      tokens: 0,
+    };
+    const meta: EventMeta = {
+      entrypoint,
+      remote: true,
+      title: pick(TITLES),
+      url: codex ? 'https://chatgpt.com/codex' : CLAUDE_CLOUD_URL,
+    };
     this.emit(a, 'session_start', {}, meta);
-    this.emit(a, 'tool_start', { toolName: CLOUD_ENTRYPOINT }, meta);
+    this.emit(a, 'tool_start', { toolName: entrypoint }, meta);
     await this.sleep(rand(25_000, 60_000));
+    if (!codex && Math.random() < 0.5) {
+      this.emit(a, 'waiting_input', {}, { reason: 'requires_action' });
+      await this.sleep(rand(8000, 16_000));
+      this.emit(a, 'prompt');
+      this.emit(a, 'tool_start', { toolName: entrypoint });
+      await this.sleep(rand(15_000, 30_000));
+    }
     const changes = { files: Math.round(rand(1, 9)), added: Math.round(rand(8, 240)), removed: Math.round(rand(0, 90)) };
-    this.emit(a, 'stop', {}, { changes });
+    this.emit(a, 'stop', {}, codex ? { changes } : undefined);
     await this.sleep(rand(12_000, 22_000));
     this.emit(a, 'session_end', {}, { reason: 'other' });
   }

@@ -57,7 +57,7 @@ function Row({
         className="row-button"
         onClick={() => onSelect(s.key)}
         onDoubleClick={() => onActivate(s.key)}
-        title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}${s.title ? `\n${s.title}` : ''}\n${describeActivity(s)}\nDuplo clique: ${s.remote ? 'abrir no site do Codex' : 'trazer a janela para a frente'}`}
+        title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}${s.title ? `\n${s.title}` : ''}\n${describeActivity(s)}\nDuplo clique: ${s.remote ? 'abrir no site do agente' : 'trazer a janela para a frente'}`}
       >
         <Avatar session={s} size={row.depth === 1 ? 24 : 32} />
         <span className="row-main">

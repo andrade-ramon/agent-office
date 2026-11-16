@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
+import { CLAUDE_PROBE_DIR } from './claude-cloud.js';
 import { sessionKey, type NormalizedEvent } from './schema.js';
 import type { SessionStore } from './state.js';
 import { isObj, num, projectFromCwd, str } from './util.js';
@@ -198,6 +199,8 @@ function parseEntry(file: string, mtimeMs: number, raw: unknown): ProcEntry | nu
   const pid = num(raw.pid);
   const sessionId = str(raw.sessionId);
   if (!pid || !sessionId) return null;
+  // A nossa própria consulta às sessões em nuvem não é uma sessão do usuário.
+  if (basename(str(raw.cwd) ?? '') === CLAUDE_PROBE_DIR) return null;
   const entrypoint = str(raw.entrypoint);
   const status = str(raw.status);
   const waitingFor = str(raw.waitingFor);

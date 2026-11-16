@@ -84,10 +84,10 @@ export interface VoiceAlertConfig {
   voice?: string;
 }
 
-/** Sessões do Codex que rodam na nuvem (consultadas pela CLI do Codex). */
-export interface CodexCloudConfig {
+/** Sessões de um agente que rodam na nuvem (consultadas pela CLI do próprio agente). */
+export interface CloudSourceConfig {
   enabled: boolean;
-  /** Caminho da CLI do Codex usada na consulta. */
+  /** Caminho da CLI usada na consulta. */
   bin?: string;
   /** Segundos entre consultas. */
   everySec?: number;
@@ -99,7 +99,8 @@ export interface OfficeConfig {
   endAfterMin?: number;
   titles?: boolean;
   voiceAlert?: VoiceAlertConfig;
-  codexCloud?: CodexCloudConfig;
+  codexCloud?: CloudSourceConfig;
+  claudeCloud?: CloudSourceConfig;
 }
 
 export function readConfig(paths: Paths): OfficeConfig {

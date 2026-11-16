@@ -99,7 +99,7 @@ export function DetailPanel(p: Props): ReactElement {
           Focar
         </button>
         {s.remote ? (
-          <button type="button" className="btn" onClick={p.onFocusWindow} disabled={!s.url} title="Abre a tarefa no site do Codex">
+          <button type="button" className="btn" onClick={p.onFocusWindow} disabled={!s.url} title="Abre a sessão no site do agente">
             <Icon name="cloud" size={12} />
             Abrir no site
           </button>
@@ -115,7 +115,7 @@ export function DetailPanel(p: Props): ReactElement {
         <dl className="fields">
           <Field label="Assunto">{s.title || <span className="muted">sem título</span>}</Field>
           <Field label={s.remote ? 'Ambiente' : 'Projeto'}>{s.project || '—'}</Field>
-          {s.remote && (
+          {s.remote && (s.changes || s.agent === 'codex') && (
             <Field label="Alterações">
               {s.changes ? (
                 <span className="changes">

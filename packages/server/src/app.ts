@@ -23,6 +23,7 @@ import {
 } from './schema.js';
 import { SessionStore, type StoreOptions } from './state.js';
 import { isObj, num, projectFromCwd, str } from './util.js';
+import { ClaudeCloudWatcher, type ClaudeCloudSettings, type ListClaudeCloud } from './claude-cloud.js';
 import { CodexCloudWatcher, type CodexCloudSettings, type ListCloudTasks } from './codex-cloud.js';
 import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
 import { TranscriptWatcher } from './watcher.js';
@@ -51,6 +52,8 @@ export interface AppOptions {
   voiceAlert?: { settings: () => VoiceAlertSettings; play?: PlayAlert; intervalMs?: number };
   /** Sessões do Codex na nuvem, consultadas pela CLI do Codex (opcional; lido a cada passo). */
   codexCloud?: { settings: () => CodexCloudSettings; list?: ListCloudTasks; intervalMs?: number };
+  /** Sessões do Claude Code na nuvem, consultadas pela CLI do Claude (opcional, experimental). */
+  claudeCloud?: { settings: () => ClaudeCloudSettings; list?: ListClaudeCloud; intervalMs?: number };
   tickMs?: number;
   log?: (msg: string) => void;
 }
@@ -223,6 +226,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       webBuilt,
       voiceAlert: voice?.status() ?? { enabled: false, pending: 0 },
       codexCloud: cloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
+      claudeCloud: claudeCloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
     };
   });
 
@@ -309,6 +313,10 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
     opts.codexCloud && !opts.demo
       ? new CodexCloudWatcher(store, opts.codexCloud.settings, opts.codexCloud.list, Date.now, log)
       : null;
+  const claudeCloud =
+    opts.claudeCloud && !opts.demo
+      ? new ClaudeCloudWatcher(store, opts.claudeCloud.settings, opts.claudeCloud.list, Date.now, log)
+      : null;
   let demo: DemoSimulator | null = null;
   const timers: NodeJS.Timeout[] = [];
 
@@ -380,6 +388,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       await startSources();
       voice?.start(opts.voiceAlert?.intervalMs);
       cloud?.start(opts.codexCloud?.intervalMs);
+      claudeCloud?.start(opts.claudeCloud?.intervalMs);
       return port;
     },
     async close() {
@@ -389,6 +398,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       codexTitles?.stop();
       voice?.stop();
       cloud?.stop();
+      claudeCloud?.stop();
       await watcher?.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

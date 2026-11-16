@@ -15,7 +15,7 @@ process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
 }) as typeof process.emitWarning;
 
 const { createApp } = await import('./app.js');
-const { DEMO_PORT, HOST, codexCloudReader, loadConfig, officeHome, voiceAlertReader } = await import('./config.js');
+const { DEMO_PORT, HOST, claudeCloudReader, codexCloudReader, loadConfig, officeHome, voiceAlertReader } = await import('./config.js');
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -108,6 +108,7 @@ const app = await createApp({
   },
   voiceAlert: { settings: voiceAlertReader(home) },
   codexCloud: { settings: codexCloudReader(home) },
+  claudeCloud: { settings: claudeCloudReader(home) },
   log,
 });
 

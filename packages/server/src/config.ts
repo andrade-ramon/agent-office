@@ -67,14 +67,23 @@ export interface CodexCloudConfig {
   everySec: number;
 }
 
-/** Seção "codexCloud": sessões do Codex que rodam na nuvem (opcional). */
-export function codexCloudReader(home: string = officeHome()): () => CodexCloudConfig {
-  const off: CodexCloudConfig = { enabled: false, bin: '', everySec: 30 };
-  return sectionReader(home, 'codexCloud', off, (o) => ({
+function cloudReader(home: string, key: string, everySec: number): () => CodexCloudConfig {
+  const off: CodexCloudConfig = { enabled: false, bin: '', everySec };
+  return sectionReader(home, key, off, (o) => ({
     enabled: o.enabled === true,
     bin: typeof o.bin === 'string' ? o.bin : '',
     everySec: positive(o.everySec) ?? off.everySec,
   }));
+}
+
+/** Seção "codexCloud": sessões do Codex que rodam na nuvem (opcional). */
+export function codexCloudReader(home: string = officeHome()): () => CodexCloudConfig {
+  return cloudReader(home, 'codexCloud', 30);
+}
+
+/** Seção "claudeCloud": sessões do Claude Code que rodam na nuvem (opcional, experimental). */
+export function claudeCloudReader(home: string = officeHome()): () => CodexCloudConfig {
+  return cloudReader(home, 'claudeCloud', 60);
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {
