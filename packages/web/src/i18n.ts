@@ -150,11 +150,31 @@ export function formatNumber(n: number): string {
   return numberFormat.format(n);
 }
 
-/** 45300 → "45,3 mil". */
+/** 45300 → "45,3 mil"; 12 864 000 000 → "12,86 bi". */
 export function formatTokens(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
-  return `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi`;
+  if (n < 1000) return String(Math.round(n));
+  if (n < 999_950) return `${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+  if (n < 999_995_000) return `${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} mi`;
+  return `${(n / 1_000_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} bi`;
+}
+
+/** Tempo somado, que pode passar de centenas de horas: "42 min", "8 h 05 min", "184,4 h". */
+export function formatHours(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 600) return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`;
+  return `${(minutes / 60).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+}
+
+/** 1732000000000 → "18/11". */
+export function formatDay(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** 1732000000000 → "18/11/2026". */
+export function formatDate(ts: number): string {
+  return `${formatDay(ts)}/${new Date(ts).getFullYear()}`;
 }
 
 export function plural(n: number, one: string, many: string): string {

@@ -139,6 +139,17 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
     [focusWindow],
   );
 
+  /** Aproxima a câmera do telão do painel de dados; de novo, volta ao escritório inteiro. */
+  const toggleBoard = useCallback(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (scene.cameraInfo().onBoard) scene.fit();
+    else {
+      setSelectedKey(null);
+      scene.focusBoard();
+    }
+  }, []);
+
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -233,6 +244,9 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
         case '0':
           sceneRef.current?.fit();
           break;
+        case 'p':
+          toggleBoard();
+          break;
         case '+':
         case '=':
           sceneRef.current?.zoomBy(1);
@@ -248,7 +262,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleFullscreen, update]);
+  }, [toggleBoard, toggleFullscreen, update]);
 
   const onReady = useCallback((scene: OfficeScene | null) => {
     sceneRef.current = scene;
@@ -409,6 +423,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             onFocus={() => {
               if (selectedKey) sceneRef.current?.focusOn(selectedKey);
             }}
+            onBoard={toggleBoard}
             onTimeMode={(timeMode: TimeMode) => update({ timeMode })}
             onToggleAreas={() => update({ areas: !prefs.areas })}
             onToggleLabels={() => update({ labels: !prefs.labels })}

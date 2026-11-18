@@ -647,6 +647,10 @@ export class Character {
           } else if (tag === 'cup' || tag === 'table') {
             arms = dir === 'up' ? 'down' : 'hold';
             item = 'cup';
+          } else if (tag === 'watch') {
+            // de pé, olhando o telão
+            dir = 'up';
+            arms = Math.floor(t / 4200) % 3 === 0 ? 'chin' : 'down';
           } else if (since > 9000) {
             eyes = 'closed';
             balloon = flip2(700) ? 'zzz1' : 'zzz2';

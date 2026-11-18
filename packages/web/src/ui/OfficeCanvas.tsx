@@ -59,11 +59,13 @@ export function OfficeCanvas(props: Props): ReactElement {
         scene = created;
         sceneRef.current = created;
         created.reset(store.getState().sessions.values());
+        created.setUsage(store.getState().usage);
         off = store.on({
           hello: (sessions: SessionState[]) => created.reset(sessions),
           session: (session) => created.upsert(session),
           remove: (key) => created.remove(key),
           event: (key, event) => created.event(key, event),
+          usage: (usage) => created.setUsage(usage),
         });
         window.__office = {
           ...created.debugHandle(),

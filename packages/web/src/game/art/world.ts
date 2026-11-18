@@ -1,4 +1,4 @@
-import { MAP_H, MAP_W, TILE, type Furniture, type OfficeLayout, type Rug } from '../layout';
+import { MAP_H, MAP_W, TILE, type Furniture, type OfficeLayout, type PixelRect, type Rug } from '../layout';
 import { AtlasBuilder, Painter, hash2, makeCanvas, makeFlat, makeSprite, rgba, rng, shade } from './painter';
 
 /**
@@ -248,6 +248,7 @@ function drawBase(office: OfficeLayout): HTMLCanvasElement {
   }
 
   for (const rug of office.rugs) drawRug(p, rug);
+  drawDataWall(p, office.dashboard);
 
   // Placa de saída sobre a porta.
   const door = office.decor.find((d) => d.kind === 'door');
@@ -270,6 +271,33 @@ function drawBase(office: OfficeLayout): HTMLCanvasElement {
     }
   }
   return canvas;
+}
+
+/** Borda da moldura do telão; o conteúdo começa depois dela. */
+export const DATA_WALL_BEZEL = 3;
+
+/**
+ * O telão do painel de dados: só a moldura e a tela apagada. Os números são
+ * desenhados por cima, em tempo real (ver `DataBoard`).
+ */
+function drawDataWall(p: Painter, r: PixelRect): void {
+  const { x, y, w, h } = r;
+  const b = DATA_WALL_BEZEL;
+  // suportes e sombra na parede
+  for (const sx of [x + 44, x + w - 52]) p.rect(sx, y + h, 8, 3, '#2a3142').rect(sx, y + h, 8, 1, '#3d465b');
+  p.rect(x + 2, y + h, w - 2, 2, 'rgba(20,16,30,0.28)').rect(x + w, y + 2, 2, h, 'rgba(20,16,30,0.2)');
+  // moldura
+  p.rect(x, y, w, h, '#161b27');
+  p.rect(x, y, w, 1, '#3a4459').rect(x, y + 1, 1, h - 2, '#2a3244');
+  p.rect(x, y + h - 1, w, 1, '#0c0f17').rect(x + w - 1, y + 1, 1, h - 2, '#0f131c');
+  p.frame(x + b - 1, y + b - 1, w - b * 2 + 2, h - b * 2 + 2, '#05080e');
+  // tela: módulos de LED lado a lado
+  p.rect(x + b, y + b, w - b * 2, h - b * 2, '#0a101c');
+  for (let mx = x + b + 57; mx < x + w - b - 8; mx += 57) p.rect(mx, y + b, 1, h - b * 2, '#0d1524');
+  for (let ly = y + b + 1; ly < y + h - b; ly += 2) p.rect(x + b, ly, w - b * 2, 1, 'rgba(255,255,255,0.012)');
+  // marca e luz de ligado
+  p.px(x + 5, y + h - 2, '#e8885a').px(x + 6, y + h - 2, '#ffd84a').px(x + 7, y + h - 2, '#7fb2ff').px(x + 8, y + h - 2, '#4fc6a8');
+  p.px(x + w - 6, y + h - 2, '#6fe3a0');
 }
 
 function drawRug(p: Painter, rug: Rug): void {
@@ -318,6 +346,17 @@ function drawRug(p: Painter, rug: Rug): void {
       p.rect(X + 3, Y + 4, w - 6, h - 8, '#8f4048');
       p.frame(X + 5, Y + 6, w - 10, h - 12, '#d9a45a');
       for (let x = X + 2; x < X + w - 2; x += 2) p.px(x, Y + 1, '#c08a5a').px(x, Y + h - 2, '#c08a5a');
+      break;
+    }
+    case 'data': {
+      // passadeira escura em frente ao telão, com marcas de onde parar para olhar
+      p.rect(X + 2, Y + 5, w - 4, h - 10, '#1f2a45');
+      p.rect(X + 3, Y + 6, w - 6, h - 12, '#27365a');
+      p.frame(X + 5, Y + 8, w - 10, h - 16, '#3b568c');
+      for (let x = X + 10; x < X + w - 12; x += 8) p.rect(x, Y + h / 2 - 1, 4, 1, '#4f77b8');
+      for (const cx of [X + 6, X + w - 9]) {
+        p.rect(cx, Y + 9, 3, 1, '#5fd0e0').rect(cx, Y + h - 10, 3, 1, '#5fd0e0');
+      }
       break;
     }
     case 'meeting': {

@@ -4,6 +4,7 @@ import type {
   ServerMessage,
   SessionState,
   StatsResponse,
+  UsageResponse,
 } from '@agent-office/server/schema';
 
 /**
@@ -21,6 +22,8 @@ export interface StoreState {
   version: string | null;
   sessions: ReadonlyMap<string, SessionState>;
   stats: StatsResponse | null;
+  /** Acumulado de todas as sessões (o telão do escritório). */
+  usage: UsageResponse | null;
   /** Diferença entre o relógio do servidor e o local (ms). */
   clockOffset: number;
   /** Quantas vezes já reconectou (para depuração). */
@@ -34,6 +37,8 @@ export interface StoreEvents {
   session(session: SessionState): void;
   remove(key: string): void;
   event(key: string, event: NormalizedEvent): void;
+  /** Os números do painel de dados mudaram. */
+  usage(usage: UsageResponse): void;
   /** Uma sessão passou a pedir atenção (ou terminou o turno). */
   attention(session: SessionState, kind: AttentionKind): void;
 }
@@ -52,6 +57,7 @@ export class OfficeStore {
     version: null,
     sessions: new Map(),
     stats: null,
+    usage: null,
     clockOffset: 0,
     reconnects: 0,
   };
@@ -90,7 +96,11 @@ export class OfficeStore {
     this.started = true;
     this.disposed = false;
     this.open();
-    this.statsTimer = window.setInterval(() => void this.refreshStats(), STATS_EVERY_MS);
+    this.statsTimer = window.setInterval(() => {
+      void this.refreshStats();
+      // O servidor avisa quando os números mudam; isto só cobre um aviso perdido e a virada do dia.
+      void this.refreshUsage();
+    }, STATS_EVERY_MS);
     this.pingTimer = window.setInterval(() => this.heartbeat(), PING_EVERY_MS);
     window.addEventListener('online', this.onOnline);
   }
@@ -132,6 +142,23 @@ export class OfficeStore {
     } catch {
       /* servidor fora do ar: a reconexão do WebSocket cuida disso */
     }
+  }
+
+  async refreshUsage(): Promise<void> {
+    if (this.disposed || this.state.conn !== 'open') return;
+    try {
+      const res = await fetch('/api/usage');
+      if (!res.ok) return;
+      const usage = (await res.json()) as UsageResponse;
+      if (usage && typeof usage === 'object' && usage.allTime) this.setUsage(usage);
+    } catch {
+      /* servidor fora do ar ou versão antiga, sem painel de dados */
+    }
+  }
+
+  private setUsage(usage: UsageResponse): void {
+    this.set({ usage });
+    this.emit('usage', usage);
   }
 
   // ───────────────────────── interno ─────────────────────────
@@ -258,6 +285,7 @@ export class OfficeStore {
         });
         this.emit('hello', msg.sessions);
         void this.refreshStats();
+        void this.refreshUsage();
         break;
       }
       case 'session': {
@@ -283,6 +311,9 @@ export class OfficeStore {
       }
       case 'event':
         this.emit('event', msg.key, msg.event);
+        break;
+      case 'usage':
+        if (msg.usage?.allTime) this.setUsage(msg.usage);
         break;
       default:
         break;

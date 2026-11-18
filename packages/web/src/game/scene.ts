@@ -1,4 +1,4 @@
-import type { NormalizedEvent, SessionState } from '@agent-office/server/schema';
+import type { NormalizedEvent, SessionState, UsageResponse } from '@agent-office/server/schema';
 import {
   Application,
   CanvasSource,
@@ -16,6 +16,7 @@ import { addBalloons } from './art/balloons';
 import { destroyAllSheets } from './art/characterSheet';
 import { SKY_H, SKY_W, buildWorldArt, type Anchor, type WorldArt } from './art/world';
 import { Character, TAG_FONT, type CharacterWorld, type FrameView, type SpawnMode } from './character';
+import { DataBoard } from './dashboard';
 import { ambientAt, hourFor, type TimeMode } from './daynight';
 import { MAP_H, MAP_W, OFFICE, TILE } from './layout';
 import { isWalkable } from './pathfinding';
@@ -35,6 +36,8 @@ export interface CameraInfo {
   viewH: number;
   canZoomIn: boolean;
   canZoomOut: boolean;
+  /** A câmera está enquadrando o telão do painel de dados. */
+  onBoard: boolean;
 }
 
 export interface Insets {
@@ -81,6 +84,10 @@ export class OfficeScene {
   private readonly lightLayer = new Container();
   private readonly topFx = new Container();
   private readonly balloons = new Container();
+  /** Telão do painel de dados (conteúdo; a moldura está no mapa base). */
+  private readonly board = new DataBoard(OFFICE.dashboard);
+  private boardRes = 0;
+  private onBoard = false;
   private readonly overlay = new Container();
   private readonly tags = new Container();
   private readonly areaLabels = new Container();
@@ -198,7 +205,8 @@ export class OfficeScene {
       this.fanLayer,
     );
     this.buildStatic();
-    this.world.addChild(this.lightLayer, this.topFx, this.balloons);
+    // O telão vem depois da camada da noite: tem luz própria.
+    this.world.addChild(this.lightLayer, this.board.view, this.topFx, this.balloons);
     this.overlay.addChild(this.areaLabels, this.tags);
     app.stage.addChild(this.world, this.overlay);
     this.buildAreaLabels();
@@ -476,6 +484,11 @@ export class OfficeScene {
     else if (ev.event === 'prompt') c.flash('chat', now);
   }
 
+  /** Números do painel de dados (telão da ala de baixo). */
+  setUsage(usage: UsageResponse | null): void {
+    this.board.setUsage(usage);
+  }
+
   // ───────────────────────── opções de exibição ─────────────────────────
 
   setSelected(key: string | null): void {
@@ -528,12 +541,23 @@ export class OfficeScene {
     return Math.min(max, Math.max(min, Number(snapped.toFixed(4))));
   }
 
+  /**
+   * Passo dos enquadramentos automáticos. Em telas de alta densidade aceita
+   * quartos de zoom (pixels de 2 e 3 pontos intercalados): o escritório não
+   * encolhe um degrau inteiro só porque faltaram alguns pixels de altura.
+   */
+  private fitStep(): number {
+    const dpr = this.app.renderer.resolution;
+    return dpr >= 1.5 && dpr < 2.5 ? 0.25 : this.zoomStep;
+  }
+
   private fitZoom(): number {
     const { min } = this.zoomLevels();
+    const step = this.fitStep();
     // Tolera cortar meio tile da parede externa de cada lado.
     const zx = this.viewW / (WORLD_W - TILE);
     const zy = this.viewH / (WORLD_H - TILE);
-    const z = Math.floor(Math.min(zx, zy) / this.zoomStep + 1e-6) * this.zoomStep;
+    const z = Math.floor(Math.min(zx, zy) / step + 1e-6) * step;
     return Math.max(min, Math.min(MAX_ZOOM, Number(z.toFixed(4))));
   }
 
@@ -552,6 +576,28 @@ export class OfficeScene {
     const wanted = Math.min(3, this.fitZoom() + 1);
     if (this.cam.zoom < wanted) this.cam.zoom = this.snapZoom(wanted);
     this.setMode('follow');
+  }
+
+  /** Enquadra o telão do painel de dados, do tamanho que couber na tela. */
+  focusBoard(): void {
+    const r = OFFICE.dashboard;
+    const step = this.fitStep();
+    const zx = this.viewW / (r.w + TILE * 2);
+    const zy = this.viewH / (r.h + TILE * 5);
+    const z = Math.floor(Math.min(zx, zy, 4) / step + 1e-6) * step;
+    this.setMode('free');
+    this.cam.zoom = Math.max(this.fitZoom(), Math.min(MAX_ZOOM, Number(z.toFixed(4))));
+    this.cam.x = r.x + r.w / 2;
+    this.cam.y = r.y + r.h / 2 + TILE;
+    this.onBoard = true;
+    this.clampCamera();
+    this.applyCamera();
+  }
+
+  private overBoard(sx: number, sy: number): boolean {
+    const w = this.toWorld(sx, sy);
+    const r = OFFICE.dashboard;
+    return w.x >= r.x && w.x < r.x + r.w && w.y >= r.y && w.y < r.y + r.h;
   }
 
   zoomBy(steps: number, sx?: number, sy?: number): void {
@@ -579,6 +625,7 @@ export class OfficeScene {
 
   private setMode(mode: CameraMode): void {
     this.mode = mode;
+    this.onBoard = false;
     if (mode !== 'follow') this.followKey = null;
   }
 
@@ -613,8 +660,14 @@ export class OfficeScene {
     this.originY = Math.round((c.y - this.cam.y * z) * res) / res;
     this.world.scale.set(z);
     this.world.position.set(this.originX, this.originY);
+    // O texto do telão é redesenhado na resolução real da tela (zoom × densidade).
+    const boardRes = Math.min(8, Math.max(1, res * z));
+    if (boardRes !== this.boardRes) {
+      this.boardRes = boardRes;
+      this.board.setResolution(boardRes);
+    }
     const info = this.cameraInfo();
-    const sig = `${info.zoom}|${info.mode}|${info.followKey}|${info.canZoomIn}|${info.canZoomOut}`;
+    const sig = `${info.zoom}|${info.mode}|${info.followKey}|${info.canZoomIn}|${info.canZoomOut}|${info.onBoard}`;
     if (sig !== this.lastCameraSig) {
       this.lastCameraSig = sig;
       this.cb.onCamera(info);
@@ -633,6 +686,7 @@ export class OfficeScene {
       viewH: this.viewH,
       canZoomIn: this.cam.zoom < max,
       canZoomOut: this.cam.zoom > min,
+      onBoard: this.onBoard,
     };
   }
 
@@ -713,7 +767,7 @@ export class OfficeScene {
       }
       const c = this.pick(p.x, p.y);
       setHover(c ? c.key : null);
-      canvas.style.cursor = c ? 'pointer' : 'grab';
+      canvas.style.cursor = c || this.overBoard(p.x, p.y) ? 'pointer' : 'grab';
     };
     const onUp = (e: PointerEvent): void => {
       if (!down || e.pointerId !== down.id) return;
@@ -730,6 +784,8 @@ export class OfficeScene {
       const p = local(e);
       const c = this.pick(p.x, p.y);
       this.cb.onSelect(c ? c.key : null);
+      // Clicar no telão aproxima a câmera dele.
+      if (!c && !this.onBoard && this.overBoard(p.x, p.y)) this.focusBoard();
     };
     const onLeave = (): void => {
       if (!down) setHover(null);
@@ -738,6 +794,7 @@ export class OfficeScene {
       const p = local(e);
       const c = this.pick(p.x, p.y);
       if (c) this.cb.onActivate(c.key);
+      else if (this.overBoard(p.x, p.y)) this.focusBoard();
       else this.fit();
     };
     const onWheel = (e: WheelEvent): void => {
@@ -897,6 +954,7 @@ export class OfficeScene {
     this.updateTethers();
     this.updateParticles(dt);
     this.updateAmbient(dt, now);
+    this.board.update(dt);
     if (this.areaLabels.visible) this.updateAreaLabels();
     const t3 = performance.now();
     const p = this.profile;
@@ -1297,6 +1355,8 @@ export class OfficeScene {
       resolution: () => this.app.renderer.resolution,
       fit: () => this.fit(),
       focus: (key: string) => this.focusOn(key),
+      focusBoard: () => this.focusBoard(),
+      board: () => ({ rect: OFFICE.dashboard, ...this.board.debug() }),
       setZoom: (z: number) => this.setZoom(z),
       setTimeMode: (m: TimeMode) => this.setTimeMode(m),
     };

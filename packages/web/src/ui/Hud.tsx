@@ -14,6 +14,8 @@ interface Props {
   onZoom(steps: number): void;
   onFit(): void;
   onFocus(): void;
+  /** Enquadra (ou desenquadra) o telão do painel de dados. */
+  onBoard(): void;
   onTimeMode(mode: TimeMode): void;
   onToggleAreas(): void;
   onToggleLabels(): void;
@@ -78,6 +80,16 @@ export function Hud(p: Props): ReactElement {
             Focar
           </button>
         )}
+        <button
+          type="button"
+          className={`tool wide ${p.camera?.onBoard ? 'on' : ''}`}
+          onClick={p.onBoard}
+          title="Painel de dados: tokens, prompts e tempo ativo acumulados (P)"
+          aria-pressed={Boolean(p.camera?.onBoard)}
+        >
+          <Icon name="chart" size={12} />
+          Painel
+        </button>
         <button type="button" className="tool" onClick={p.onFit} title="Ver o escritório inteiro (0)">
           <Icon name="fit" size={12} />
         </button>

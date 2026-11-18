@@ -8,7 +8,7 @@ import type { AreaId, Dir, SeatKind, Slot } from './types';
 
 export const TILE = 16;
 export const MAP_W = 44;
-export const MAP_H = 28;
+export const MAP_H = 38;
 
 export type TileKind = 'floor' | 'cap' | 'face' | 'door';
 export type FloorKind = 'wood' | 'server' | 'carpet' | 'library' | 'copa';
@@ -65,7 +65,7 @@ export interface Rug {
   y: number;
   w: number;
   h: number;
-  style: 'web' | 'cloud' | 'lounge' | 'library' | 'mat' | 'meeting';
+  style: 'web' | 'cloud' | 'lounge' | 'library' | 'mat' | 'meeting' | 'data';
 }
 
 export interface Desk extends Slot {
@@ -88,6 +88,14 @@ export interface LightSpot {
   color: number;
 }
 
+/** Retângulo em pixels do mundo. */
+export interface PixelRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface AreaLabel {
   text: string;
   hint: string;
@@ -106,6 +114,8 @@ export interface OfficeLayout extends Grid {
   lights: LightSpot[];
   fans: { x: number; y: number }[];
   labels: AreaLabel[];
+  /** O telão do painel de dados, pendurado na parede da ala de baixo. */
+  dashboard: PixelRect;
 }
 
 export const COST_FLOOR = 2;
@@ -198,6 +208,10 @@ export function buildOffice(): OfficeLayout {
   fill(33, 0, 33, 10, 'cap');
   fill(33, 10, w - 1, 10, 'cap');
   fill(33, 11, w - 2, 11, 'face');
+  // central de dados (ala de baixo): uma parede alta para o telão, com um
+  // corredor de cada lado ligando a ala ao resto do escritório
+  fill(3, 27, 40, 27, 'cap');
+  fill(3, 28, 40, 33, 'face');
   // passagens
   for (const y of [6, 7]) {
     tiles[at(10, y)] = 'floor';
@@ -212,6 +226,7 @@ export function buildOffice(): OfficeLayout {
   zone(33, 3, 42, 9, 'carpet');
   zone(1, 12, 10, 26, 'library');
   zone(33, 12, 42, 26, 'copa');
+  zone(1, 27, 42, 36, 'server');
 
   // ───────────── helpers de mobília ─────────────
   const put = (kind: FurnitureKind, x: number, y: number, fw = 1, fh = 1, variant = 0, dir: Dir = 'down'): void => {
@@ -421,7 +436,6 @@ export function buildOffice(): OfficeLayout {
   for (let x = 3; x <= 6; x++) seatAt('shelf', x, 21, 'down', 'table', 2, 2);
   for (let x = 3; x <= 6; x++) seatAt('shelf', x, 23, 'up', 'table', 2, 2);
   put('lamp', 9, 21);
-  put('plant', 1, 26, 1, 1, 2);
   put('plant', 9, 26, 1, 1, 0);
 
   // ───────────── copa (ociosos) ─────────────
@@ -446,8 +460,16 @@ export function buildOffice(): OfficeLayout {
   slot('copa', 40, 23, 'down', 'sofa', 'puff');
   put('puff', 41, 25, 1, 1, 1);
   slot('copa', 41, 25, 'down', 'sofa', 'puff');
-  put('plant', 42, 26, 1, 1, 1);
   put('plant', 33, 26, 1, 1, 2);
+
+  // ───────────── central de dados (telão com o acumulado das sessões) ─────────────
+  rugs.push({ x: 6, y: 34, w: 32, h: 3, style: 'data' });
+  // Quem está ocioso por perto para para olhar os números.
+  for (const x of [10, 16, 22, 28, 34]) slot('copa', x, 35, 'up', 'stand', 'watch');
+  put('plant', 3, 34, 1, 1, 2);
+  put('plant', 40, 34, 1, 1, 1);
+  put('plant', 1, 36, 1, 1, 0);
+  put('plant', 42, 36, 1, 1, 2);
 
   // ───────────── decoração da área aberta ─────────────
   put('copier', 12, 20);
@@ -487,6 +509,9 @@ export function buildOffice(): OfficeLayout {
     { x: 28.5, y: 21, radius: 3.4, color: 0xcfe6ff },
     { x: 15, y: 25, radius: 3.4, color: 0xffe2a8 },
     { x: 29, y: 25, radius: 3.4, color: 0xffe2a8 },
+    { x: 11, y: 34.5, radius: 5, color: 0x8fc8ff },
+    { x: 22, y: 34.5, radius: 5.5, color: 0x8fc8ff },
+    { x: 33, y: 34.5, radius: 5, color: 0x8fc8ff },
   ];
 
   const labels: AreaLabel[] = [
@@ -501,6 +526,7 @@ export function buildOffice(): OfficeLayout {
     { text: 'Nuvem', hint: 'sessões remotas', x: 28.5, y: 24.3 },
     { text: 'Copa', hint: 'ociosos', x: 38, y: 20.3 },
     { text: 'Bancada', hint: 'mesas extras', x: 15, y: 24.3 },
+    { text: 'Painel de dados', hint: 'acumulado das sessões', x: 22, y: 36.3 },
   ];
 
   return {
@@ -520,6 +546,8 @@ export function buildOffice(): OfficeLayout {
       { x: 25, y: 11.5 },
     ],
     labels,
+    // Tiles 4 a 39 da parede; sobra uma faixa de parede e o rodapé embaixo.
+    dashboard: { x: 4 * TILE, y: 28 * TILE + 4, w: 36 * TILE, h: 82 },
   };
 }
 
