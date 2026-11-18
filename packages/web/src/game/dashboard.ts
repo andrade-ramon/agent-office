@@ -223,7 +223,8 @@ export class DataBoard {
       if (label === this.shownText[i]) return;
       this.shownText[i] = label;
       this.kpiValue[i]!.text = label;
-      this.fit(this.kpiValue[i]!, COLS[i]!.w);
+      // um respiro antes da linha que separa as colunas
+      this.fit(this.kpiValue[i]!, COLS[i]!.w - 5);
     });
 
     const page = m.pages.length > 0 ? Math.floor(this.clock / PAGE_MS) % m.pages.length : 0;
