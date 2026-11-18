@@ -58,6 +58,7 @@ Abra **http://localhost:4747**.
 | `agent-office alert on --sound siren` | Liga o alerta sonoro: sirene, bipe ou seu nome em voz alta (veja abaixo). `off`, `test` e `status` completam. |
 | `agent-office cloud on` | Mostra também as sessões que rodam na nuvem do Codex e do Claude (veja abaixo). `off` e `status` completam. |
 | `agent-office peer add <nome> <host>` | Mostra também as sessões de outro computador seu que roda o agent-office (veja abaixo). `remove` e `status` completam. |
+| `agent-office rate <reais por dólar>` | Define o câmbio do custo em reais no painel de dados (veja abaixo). `reset` e `status` completam. |
 | `agent-office doctor` | Diagnóstico completo, incluindo o teste de fail-open do hook. |
 | `agent-office fix-settings` | Corrige problemas conhecidos do `~/.claude/settings.json` que fazem o Claude Code ignorar o arquivo. |
 | `agent-office uninstall` | `disconnect` + remove o serviço. `--purge` apaga `~/.agent-office`. |
@@ -158,6 +159,7 @@ Na ala de baixo do escritório há um telão com o **acumulado de todas as sess�
 |---|---|
 | **Tokens** | soma de todas as sessões, com a composição: entrada, saída, cache lido e cache gravado (o cache lido costuma ser quase tudo) |
 | **Custo estimado** | quanto esses tokens custariam em dólares, a preço de tabela das APIs da Anthropic e da OpenAI |
+| **Custo em reais** | o mesmo custo convertido pelo câmbio mostrado no topo do telão |
 | **Prompts** | quantas mensagens você enviou aos agentes |
 | **Tempo ativo** | tempo em que as sessões estiveram trabalhando, somado entre elas (duas sessões em paralelo por uma hora = duas horas) |
 | **Sessões** | sessões principais, com os subagentes contados à parte |
@@ -184,6 +186,14 @@ A tabela de preços fica no código ([`pricing.ts`](packages/server/src/pricing.
 ```
 
 `cacheRead`, `cacheWrite` e `cacheWrite1h` são opcionais (padrão: 0,1×, 1,25× e 2× o preço de entrada).
+
+O **custo em reais** converte tudo por um câmbio só, o que aparece no topo do telão. Pelo mesmo motivo (nada é consultado fora da máquina), o agent-office não busca a cotação do dia: sem um valor seu, usa uma referência embutida no código (PTAX de venda de 17/11/2026, R$ 5,7851). Para usar outra cotação, informe quantos reais vale um dólar; vale na hora, sem reiniciar:
+
+```bash
+agent-office rate 5,43
+```
+
+`agent-office rate` mostra o câmbio em uso e `agent-office rate reset` volta à referência embutida.
 
 Os mesmos números estão em `GET /api/usage`.
 
