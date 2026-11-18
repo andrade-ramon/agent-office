@@ -8,7 +8,9 @@ const ROWS = 9;
 
 /**
  * Atlas de poses de uma variante de personagem. As poses são desenhadas sob
- * demanda e reaproveitadas por todos os personagens com a mesma aparência.
+ * demanda e reaproveitadas por todos os personagens com a mesma aparência —
+ * inclusive entre a cena principal e a do mini mapa, que têm cada uma o seu
+ * renderizador.
  */
 export class CharacterSheet {
   refs = 0;
@@ -67,9 +69,4 @@ export function releaseSheet(sheet: CharacterSheet): void {
   if (sheet.refs > 0) return;
   sheets.delete(sheet.variant.id);
   sheet.destroy();
-}
-
-export function destroyAllSheets(): void {
-  for (const sheet of sheets.values()) sheet.destroy();
-  sheets.clear();
 }

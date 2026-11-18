@@ -1384,3 +1384,96 @@ body.resizing {
 body.resizing canvas {
   pointer-events: none;
 }
+
+/* ───────────── mini mapa (janela flutuante) ───────────── */
+
+body.mini-window {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.mini-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+.mini-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.mini-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  overflow: hidden;
+  background: var(--panel);
+  border-top: 2px solid var(--edge);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.mini-counts {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+}
+.mini-counts b {
+  color: var(--text);
+}
+/* Alguém esperando por você: a barra inteira vira o aviso. */
+.mini-root.attention .mini-bar {
+  background: var(--attention);
+  color: #2a2008;
+}
+.mini-attention {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  overflow: hidden;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  animation: nudge 1.2s steps(2, start) infinite;
+}
+.mini-tools {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-left: auto;
+}
+.mini-size {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mini-size:hover {
+  background: var(--panel-3);
+  color: var(--text);
+}
+.mini-root.attention .mini-size {
+  background: rgba(42, 32, 8, 0.14);
+  border-color: rgba(42, 32, 8, 0.35);
+  color: #2a2008;
+}

@@ -19,6 +19,7 @@ import {
   setTitle,
   showNotification,
 } from './notify';
+import { openMiniWindow, pipSupported } from './pip';
 import { canInstall, promptInstall, setAppBadge, subscribeInstall } from './pwa';
 import { DETAIL_WIDTH, loadPrefs, savePrefs, SIDEBAR_WIDTH, type AgentFilter, type Prefs } from './prefs';
 import { Resizer } from './ui/Resizer';
@@ -27,6 +28,7 @@ import { DetailPanel } from './ui/DetailPanel';
 import { Header, connLabel } from './ui/Header';
 import { Hud } from './ui/Hud';
 import { Icon } from './ui/Icon';
+import { MiniWindow } from './ui/MiniWindow';
 import { OfficeCanvas } from './ui/OfficeCanvas';
 import { SessionList } from './ui/SessionList';
 import { useNow } from './ui/bits';
@@ -47,6 +49,9 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
   const [camera, setCamera] = useState<CameraInfo | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [fullscreen, setFullscreen] = useState<boolean>(() => Boolean(document.fullscreenElement));
+  /** Mini mapa: a janela flutuante, enquanto estiver aberta. */
+  const [mini, setMini] = useState<(Window & typeof globalThis) | null>(null);
+  const miniRef = useRef<(Window & typeof globalThis) | null>(null);
   const sceneRef = useRef<OfficeScene | null>(null);
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
@@ -149,6 +154,45 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
       scene.focusBoard();
     }
   }, []);
+
+  /** Abre ou oculta o mini mapa flutuante. O navegador só deixa abrir a partir de um clique ou tecla. */
+  const closeMini = useCallback(() => miniRef.current?.close(), []);
+  const toggleMini = useCallback(() => {
+    if (miniRef.current) {
+      miniRef.current.close();
+      return;
+    }
+    if (!pipSupported()) {
+      toast('Este navegador não tem janela flutuante. Use o Chrome ou o Edge.', 'warn');
+      return;
+    }
+    const p = prefsRef.current;
+    openMiniWindow({ width: p.miniWidth, height: p.miniHeight }).then(
+      (win) => {
+        miniRef.current = win;
+        setMini(win);
+        // Fechada pelo X da janela, pelo botão ou junto com a página.
+        win.addEventListener(
+          'pagehide',
+          () => {
+            miniRef.current = null;
+            setMini(null);
+          },
+          { once: true },
+        );
+        // Lembra do tamanho em que o usuário deixou.
+        let timer = 0;
+        win.addEventListener('resize', () => {
+          win.clearTimeout(timer);
+          timer = win.setTimeout(() => update({ miniWidth: win.innerWidth, miniHeight: win.innerHeight }), 400);
+        });
+      },
+      () => toast('Não foi possível abrir o mini mapa.', 'warn'),
+    );
+  }, [toast, update]);
+
+  // A janela flutuante não sobrevive à página que a abriu.
+  useEffect(() => () => miniRef.current?.close(), []);
 
   const toggleDuck = useCallback(() => {
     const on = !prefsRef.current.duck;
@@ -255,6 +299,9 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
         case 'q':
           toggleDuck();
           break;
+        case 'm':
+          toggleMini();
+          break;
         case '0':
           sceneRef.current?.fit();
           break;
@@ -276,7 +323,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleBoard, toggleDuck, toggleFullscreen, update]);
+  }, [toggleBoard, toggleDuck, toggleFullscreen, toggleMini, update]);
 
   const onReady = useCallback((scene: OfficeScene | null) => {
     sceneRef.current = scene;
@@ -309,12 +356,14 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
           notify={notifyOn}
           notifyDone={notifyOn && prefs.notifyDone}
           fullscreen={fullscreen}
+          mini={mini !== null}
           installable={installable}
           onInstall={install}
           onAttention={goAttention}
           onToggleLabels={() => update({ labels: !prefs.labels })}
           onToggleNotify={() => void cycleNotify()}
           onCompact={() => update({ compact: true })}
+          onMini={toggleMini}
           onFullscreen={toggleFullscreen}
         />
       )}
@@ -388,6 +437,14 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
                 title="Sair do modo compacto (C)"
               >
                 <Icon name="compact" size={12} />
+              </button>
+              <button
+                type="button"
+                className={`tool ${mini ? 'on' : ''}`}
+                onClick={toggleMini}
+                title="Mini mapa: janela flutuante que fica por cima dos outros apps (M)"
+              >
+                <Icon name="pip" size={12} />
               </button>
               <button
                 type="button"
@@ -472,6 +529,30 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
               max={DETAIL_WIDTH.max}
               defaultWidth={DETAIL_WIDTH.default}
               onResize={(detailWidth) => update({ detailWidth })}
+            />
+          )}
+
+          {mini && (
+            <MiniWindow
+              win={mini}
+              store={store}
+              conn={state.conn}
+              total={alive.length}
+              counts={counts}
+              attention={attention.length}
+              duck={prefs.duck}
+              timeMode={prefs.timeMode}
+              selectedKey={selectedKey}
+              onSelect={(key) => {
+                selectAndFocus(key);
+                window.focus();
+              }}
+              onActivate={activate}
+              onAttention={() => {
+                goAttention();
+                window.focus();
+              }}
+              onClose={closeMini}
             />
           )}
 

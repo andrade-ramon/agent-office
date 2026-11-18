@@ -40,6 +40,8 @@ export interface CharacterWorld {
 export interface FrameView {
   zoom: number;
   showLabels: boolean;
+  /** Mesmo sem etiquetas, mostra o nome de quem está esperando o usuário (mini mapa). */
+  attentionLabels?: boolean;
   /** Transformação mundo → tela. */
   originX: number;
   originY: number;
@@ -721,7 +723,8 @@ export class Character {
     // ── etiqueta ──
     const sitDrop = seated && !this.variant.small ? 2 : 0;
     const headY = this.y - this.height + sitDrop + dy;
-    const showTag = (view.showLabels || this.hovered || this.selected) && !this.dim && this.alpha > 0.5;
+    const asking = view.attentionLabels === true && (status === 'permission_wait' || status === 'waiting_input');
+    const showTag = (view.showLabels || this.hovered || this.selected || asking) && !this.dim && this.alpha > 0.5;
     let tagSpace = 0;
     if (showTag) {
       const detailed = view.zoom >= 3 || this.hovered || this.selected;

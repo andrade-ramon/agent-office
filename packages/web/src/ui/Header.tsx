@@ -18,6 +18,8 @@ interface Props {
   /** Notifica também quando um turno termina. */
   notifyDone: boolean;
   fullscreen: boolean;
+  /** O mini mapa flutuante está aberto. */
+  mini: boolean;
   /** O navegador oferece instalar como app (Chrome/Edge, ainda não instalado). */
   installable: boolean;
   onInstall(): void;
@@ -25,6 +27,7 @@ interface Props {
   onToggleLabels(): void;
   onToggleNotify(): void;
   onCompact(): void;
+  onMini(): void;
   onFullscreen(): void;
 }
 
@@ -119,6 +122,15 @@ export function Header(p: Props): ReactElement {
         </button>
         <button type="button" className="tool" onClick={p.onCompact} title="Modo compacto (C)">
           <Icon name="compact" />
+        </button>
+        <button
+          type="button"
+          className={`tool ${p.mini ? 'on' : ''}`}
+          onClick={p.onMini}
+          title="Mini mapa: janela flutuante que fica por cima dos outros apps (M)"
+          aria-pressed={p.mini}
+        >
+          <Icon name="pip" />
         </button>
         <button
           type="button"

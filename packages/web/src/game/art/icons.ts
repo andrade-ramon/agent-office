@@ -42,6 +42,7 @@ export type IconName =
   | 'help'
   | 'chart'
   | 'duck'
+  | 'pip'
   | 'close';
 
 export const ICONS: Record<IconName, readonly string[]> = {
@@ -336,6 +337,15 @@ export const ICONS: Record<IconName, readonly string[]> = {
     'X..X..X',
     'X.....X',
     '.XXXXX.',
+  ],
+  pip: [
+    'XXXXXXX',
+    'X.....X',
+    'X.....X',
+    'X..XXXX',
+    'X..XXXX',
+    'X..XXXX',
+    'XXXXXXX',
   ],
   duck: [
     '..XXX..',

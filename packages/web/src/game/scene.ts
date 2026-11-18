@@ -13,7 +13,6 @@ import {
   type Ticker,
 } from 'pixi.js';
 import { addBalloons } from './art/balloons';
-import { destroyAllSheets } from './art/characterSheet';
 import { SKY_H, SKY_W, buildWorldArt, type Anchor, type WorldArt } from './art/world';
 import { Character, TAG_FONT, type CharacterWorld, type FrameView, type SpawnMode } from './character';
 import { DataBoard } from './dashboard';
@@ -54,6 +53,17 @@ export interface SceneCallbacks {
   onCamera(info: CameraInfo): void;
 }
 
+export interface SceneOptions {
+  /**
+   * Janela onde a cena aparece (padrão: a principal). Numa janela flutuante é
+   * ela que dita o ritmo dos quadros: a principal pode estar oculta, com as
+   * animações suspensas pelo navegador.
+   */
+  view?: Window & typeof globalThis;
+  /** Mini mapa: só mostra o nome de quem está esperando por você. */
+  mini?: boolean;
+}
+
 interface Particle {
   sprite: Sprite;
   vx: number;
@@ -67,10 +77,17 @@ const MAX_ZOOM = 6;
 /** Recém-criada no servidor: entra pela porta em vez de aparecer no lugar. */
 const FRESH_MS = 20_000;
 
+/** Cenas vivas: a principal e, enquanto aberto, o mini mapa. */
+let liveScenes = 0;
+
 export class OfficeScene {
   private readonly app: Application;
   private readonly host: HTMLElement;
   private readonly cb: SceneCallbacks;
+  private readonly view: Window & typeof globalThis;
+  private readonly mini: boolean;
+  /** Laço de quadros próprio, quando a cena está em outra janela. */
+  private raf = 0;
   private readonly art: WorldArt;
   private readonly textures = new Map<string, Texture>();
   private readonly disposables: (() => void)[] = [];
@@ -164,14 +181,17 @@ export class OfficeScene {
   private cloudTexture: Texture | null = null;
   private destroyed = false;
 
-  static async create(host: HTMLElement, cb: SceneCallbacks): Promise<OfficeScene> {
+  static async create(host: HTMLElement, cb: SceneCallbacks, opts: SceneOptions = {}): Promise<OfficeScene> {
+    const view = opts.view ?? window;
     const app = new Application();
     await app.init({
+      // Em outra janela, o canvas nasce no documento dela e os quadros são puxados por ela.
+      ...(view !== window ? { canvas: view.document.createElement('canvas'), autoStart: false } : {}),
       preference: 'webgl',
       background: 0x11131b,
       antialias: false,
       autoDensity: true,
-      resolution: window.devicePixelRatio || 1,
+      resolution: view.devicePixelRatio || 1,
       width: Math.max(1, host.clientWidth),
       height: Math.max(1, host.clientHeight),
       roundPixels: true,
@@ -180,13 +200,16 @@ export class OfficeScene {
       // mesmo quando o navegador reduz a taxa de quadros.
       preserveDrawingBuffer: true,
     });
-    return new OfficeScene(app, host, cb);
+    liveScenes++;
+    return new OfficeScene(app, host, cb, view, opts.mini === true);
   }
 
-  private constructor(app: Application, host: HTMLElement, cb: SceneCallbacks) {
+  private constructor(app: Application, host: HTMLElement, cb: SceneCallbacks, view: Window & typeof globalThis, mini: boolean) {
     this.app = app;
     this.host = host;
     this.cb = cb;
+    this.view = view;
+    this.mini = mini;
     this.art = buildWorldArt(OFFICE);
     addBalloons(this.art.atlas);
 
@@ -556,6 +579,8 @@ export class OfficeScene {
    * encolhe um degrau inteiro só porque faltaram alguns pixels de altura.
    */
   private fitStep(): number {
+    // No mini mapa o que importa é caber: quartos de zoom em qualquer tela.
+    if (this.mini) return 0.25;
     const dpr = this.app.renderer.resolution;
     return dpr >= 1.5 && dpr < 2.5 ? 0.25 : this.zoomStep;
   }
@@ -844,7 +869,10 @@ export class OfficeScene {
   }
 
   private bindResize(): void {
-    const ro = new ResizeObserver(() => this.resize());
+    const view = this.view;
+    const own = view !== window;
+    // O observador precisa ser o da janela onde a cena está: o da principal para de avisar quando ela fica oculta.
+    const ro = new view.ResizeObserver(() => this.resize());
     ro.observe(this.host);
     this.disposables.push(() => ro.disconnect());
 
@@ -852,37 +880,56 @@ export class OfficeScene {
     let mq: MediaQueryList | null = null;
     const onDpr = (): void => {
       mq?.removeEventListener('change', onDpr);
-      mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      mq = view.matchMedia(`(resolution: ${view.devicePixelRatio}dppx)`);
       mq.addEventListener('change', onDpr);
       this.resize();
     };
     onDpr();
     this.disposables.push(() => mq?.removeEventListener('change', onDpr));
 
+    const frame = (): void => {
+      if (this.destroyed) return;
+      this.raf = view.requestAnimationFrame(frame);
+      this.app.ticker.update();
+    };
+    const run = (on: boolean): void => {
+      if (!own) {
+        if (on) this.app.ticker.start();
+        else this.app.ticker.stop();
+        return;
+      }
+      view.cancelAnimationFrame(this.raf);
+      this.raf = on ? view.requestAnimationFrame(frame) : 0;
+    };
+    if (own) {
+      run(true);
+      this.disposables.push(() => view.cancelAnimationFrame(this.raf));
+    }
+
     const onVisibility = (): void => {
-      if (document.hidden) {
+      if (view.document.hidden) {
         this.hiddenAt = Date.now();
-        this.app.ticker.stop();
+        run(false);
       } else {
         const away = this.hiddenAt ? Date.now() - this.hiddenAt : 0;
         this.hiddenAt = 0;
         if (away > 1500) this.catchUp();
-        this.app.ticker.start();
+        run(true);
       }
     };
-    document.addEventListener('visibilitychange', onVisibility);
-    this.disposables.push(() => document.removeEventListener('visibilitychange', onVisibility));
-    if (document.hidden) onVisibility();
+    view.document.addEventListener('visibilitychange', onVisibility);
+    this.disposables.push(() => view.document.removeEventListener('visibilitychange', onVisibility));
+    if (view.document.hidden) onVisibility();
 
     // Rede de segurança: alguns navegadores embutidos reduzem muito o
     // requestAnimationFrame / ResizeObserver sem marcar a página como oculta.
     // Nesse caso um temporizador mantém a cena viva (poucos quadros por segundo).
-    const watchdog = window.setInterval(() => {
-      if (this.destroyed || document.hidden) return;
+    const watchdog = view.setInterval(() => {
+      if (this.destroyed || view.document.hidden) return;
       this.resize();
       if (performance.now() - this.lastFrameAt > 300) this.app.ticker.update();
     }, 220);
-    this.disposables.push(() => window.clearInterval(watchdog));
+    this.disposables.push(() => view.clearInterval(watchdog));
   }
 
   /** Depois de um tempo com a aba oculta: todo mundo aparece onde deveria estar. */
@@ -895,7 +942,7 @@ export class OfficeScene {
     if (this.destroyed) return;
     const w = Math.max(1, Math.floor(this.host.clientWidth));
     const h = Math.max(1, Math.floor(this.host.clientHeight));
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = this.view.devicePixelRatio || 1;
     const sizeChanged = w !== this.viewW || h !== this.viewH;
     const resChanged = dpr !== this.app.renderer.resolution;
     if (!sizeChanged && !resChanged) return;
@@ -942,6 +989,7 @@ export class OfficeScene {
     const view: FrameView = {
       zoom: this.cam.zoom,
       showLabels: this.showLabels,
+      attentionLabels: this.mini,
       originX: this.originX,
       originY: this.originY,
     };
@@ -1378,12 +1426,16 @@ export class OfficeScene {
     this.destroyed = true;
     for (const d of this.disposables) d();
     this.app.ticker.remove(this.tick);
+    // Cada personagem devolve a sua folha de sprites; elas são compartilhadas
+    // com a outra cena (principal ou mini mapa) e só somem quando ninguém usa.
     for (const c of this.chars.values()) c.destroy();
     this.chars.clear();
-    destroyAllSheets();
     this.cloudTexture?.destroy(true);
     const canvas = this.app.canvas;
-    this.app.destroy(true, { children: true, texture: true, textureSource: true });
+    // Os recursos globais do Pixi (pools de lotes e texturas) são de todas as
+    // cenas: só a última a sair os libera, senão a outra para de desenhar.
+    liveScenes = Math.max(0, liveScenes - 1);
+    this.app.destroy({ removeView: true, releaseGlobalResources: liveScenes === 0 }, { children: true, texture: true, textureSource: true });
     canvas.remove();
   }
 }

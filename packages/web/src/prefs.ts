@@ -1,4 +1,5 @@
 import { TIME_MODES, type TimeMode } from './game/daynight';
+import { MINI_LIMITS, miniSize } from './pip';
 
 /** Preferências de interface, guardadas no localStorage. */
 
@@ -21,10 +22,15 @@ export interface Prefs {
   sidebarWidth: number;
   /** Largura (px) do painel de detalhes. */
   detailWidth: number;
+  /** Tamanho (px) do mini mapa em janela flutuante, como o usuário deixou. */
+  miniWidth: number;
+  miniHeight: number;
 }
 
 export const SIDEBAR_WIDTH = { min: 200, max: 560, default: 224 } as const;
 export const DETAIL_WIDTH = { min: 260, max: 720, default: 320 } as const;
+const MINI_WIDTH = { min: MINI_LIMITS.minWidth, max: MINI_LIMITS.maxWidth, default: miniSize('p').width } as const;
+const MINI_HEIGHT = { min: MINI_LIMITS.minHeight, max: MINI_LIMITS.maxHeight, default: miniSize('p').height } as const;
 
 export const DEFAULT_PREFS: Prefs = {
   agent: 'all',
@@ -38,6 +44,8 @@ export const DEFAULT_PREFS: Prefs = {
   timeMode: 'auto',
   sidebarWidth: SIDEBAR_WIDTH.default,
   detailWidth: DETAIL_WIDTH.default,
+  miniWidth: MINI_WIDTH.default,
+  miniHeight: MINI_HEIGHT.default,
 };
 
 const KEY = 'agent-office:prefs:v1';
@@ -69,6 +77,8 @@ export function loadPrefs(): Prefs {
       timeMode,
       sidebarWidth: width(data.sidebarWidth, SIDEBAR_WIDTH),
       detailWidth: width(data.detailWidth, DETAIL_WIDTH),
+      miniWidth: width(data.miniWidth, MINI_WIDTH),
+      miniHeight: width(data.miniHeight, MINI_HEIGHT),
     };
   } catch {
     return { ...DEFAULT_PREFS };

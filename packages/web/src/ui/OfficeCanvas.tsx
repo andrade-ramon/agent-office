@@ -18,6 +18,8 @@ interface Props {
   timeMode: TimeMode;
   /** Largura (px) coberta pelo painel de detalhes, à direita. */
   insetRight: number;
+  /** Mini mapa: a cena roda em outra janela (flutuante), sem etiquetas. */
+  view?: Window & typeof globalThis;
   onSelect(key: string | null): void;
   onActivate(key: string): void;
   onCamera(info: CameraInfo): void;
@@ -28,12 +30,14 @@ declare global {
   interface Window {
     /** Alça de depuração para verificação automatizada. */
     __office?: Record<string, unknown>;
+    /** A mesma alça, para a cena do mini mapa flutuante. */
+    __officeMini?: Record<string, unknown>;
   }
 }
 
 /** Monta a cena Pixi e a mantém em sincronia com o estado do app. */
 export function OfficeCanvas(props: Props): ReactElement {
-  const { store, selectedKey, agent, project, labels, areas, duck, timeMode, insetRight } = props;
+  const { store, selectedKey, agent, project, labels, areas, duck, timeMode, insetRight, view } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<OfficeScene | null>(null);
   const callbacks = useRef(props);
@@ -48,11 +52,17 @@ export function OfficeCanvas(props: Props): ReactElement {
     let scene: OfficeScene | null = null;
     let off: (() => void) | null = null;
 
-    OfficeScene.create(host, {
-      onSelect: (key) => callbacks.current.onSelect(key),
-      onActivate: (key) => callbacks.current.onActivate(key),
-      onCamera: (info) => callbacks.current.onCamera(info),
-    })
+    // A alça de depuração do mini mapa tem outro nome, para não tomar o lugar da principal.
+    const handle = view ? '__officeMini' : '__office';
+    OfficeScene.create(
+      host,
+      {
+        onSelect: (key) => callbacks.current.onSelect(key),
+        onActivate: (key) => callbacks.current.onActivate(key),
+        onCamera: (info) => callbacks.current.onCamera(info),
+      },
+      view ? { view, mini: true } : {},
+    )
       .then((created) => {
         if (cancelled) {
           created.destroy();
@@ -71,7 +81,7 @@ export function OfficeCanvas(props: Props): ReactElement {
           event: (key, event) => created.event(key, event),
           usage: (usage) => created.setUsage(usage),
         });
-        window.__office = {
+        window[handle] = {
           ...created.debugHandle(),
           state: () => {
             const s = store.getState();
@@ -102,10 +112,10 @@ export function OfficeCanvas(props: Props): ReactElement {
         scene.destroy();
       }
       sceneRef.current = null;
-      delete window.__office;
+      delete window[handle];
       setReady(false);
     };
-  }, [store]);
+  }, [store, view]);
 
   useEffect(() => {
     sceneRef.current?.setSelected(selectedKey);
