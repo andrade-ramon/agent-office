@@ -114,6 +114,8 @@ export interface OfficeConfig {
   codexCloud?: CloudSourceConfig;
   claudeCloud?: CloudSourceConfig;
   peers?: PeerEntry[];
+  /** Câmbio (reais por dólar) para o custo em reais do painel de dados. */
+  usdBrl?: number;
 }
 
 export function readConfig(paths: Paths): OfficeConfig {

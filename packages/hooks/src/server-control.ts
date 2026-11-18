@@ -62,6 +62,19 @@ export async function getHealth(port: number, timeoutMs = 1500): Promise<Health 
   }
 }
 
+/** Câmbio que o servidor está usando no painel de dados (o seu ou a referência embutida). */
+export async function getServerRate(port: number, timeoutMs = 1500): Promise<{ rate: number; asOf: string | null } | null> {
+  const res = await httpGet(port, '/api/usage', timeoutMs);
+  if (!res || res.status !== 200) return null;
+  try {
+    const cost = (JSON.parse(res.body) as { cost?: { usdBrl?: unknown; usdBrlAsOf?: unknown } }).cost;
+    if (typeof cost?.usdBrl !== 'number') return null;
+    return { rate: cost.usdBrl, asOf: typeof cost.usdBrlAsOf === 'string' ? cost.usdBrlAsOf : null };
+  } catch {
+    return null;
+  }
+}
+
 export async function waitForHealth(port: number, timeoutMs = 10_000): Promise<Health | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

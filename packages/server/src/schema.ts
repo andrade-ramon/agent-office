@@ -308,8 +308,16 @@ export interface UsageResponse {
   /** Modelos e projetos que mais consumiram tokens. */
   models: UsageRank[];
   projects: UsageRank[];
-  /** Sobre a estimativa de custo: data da tabela de preços e o que ficou sem preço. */
-  cost: { pricesAsOf: string; unpricedTokens: number; unpriced: UsageRank[] };
+  /** Sobre a estimativa de custo: data da tabela de preços, o que ficou sem preço e o câmbio. */
+  cost: {
+    pricesAsOf: string;
+    unpricedTokens: number;
+    unpriced: UsageRank[];
+    /** Reais por dólar, para mostrar o custo em reais. */
+    usdBrl: number;
+    /** Data da referência embutida; null quando o câmbio foi definido no config.json. */
+    usdBrlAsOf: string | null;
+  };
   /** Dias com alguma atividade. */
   activeDays: number;
   busiestDay: { day: number; tokens: number } | null;

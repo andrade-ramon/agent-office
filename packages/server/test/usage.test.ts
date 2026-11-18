@@ -8,6 +8,7 @@ import { HistoryDb } from '../src/db.js';
 import { ClaudeTranscriptParser } from '../src/normalize/claude.js';
 import { CodexRolloutParser } from '../src/normalize/codex.js';
 import type { ServerMessage, UsageResponse } from '../src/schema.js';
+import { USD_BRL } from '../src/pricing.js';
 import { ACTIVE_GAP_MS, UsageLedger, type TranscriptFile } from '../src/usage.js';
 
 const SID = '11111111-2222-3333-4444-555555555555';
@@ -317,6 +318,9 @@ describe('painel de dados: livro-razão de uso', () => {
     });
     expect(s.cost).toMatchObject({ unpricedTokens: 3_000_000, unpriced: [{ name: 'modelo-novo-9', tokens: 3_000_000 }] });
     expect(s.cost.pricesAsOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Sem câmbio no config.json, vale a referência embutida (com a data dela).
+    expect(s.cost.usdBrl).toBe(USD_BRL.rate);
+    expect(s.cost.usdBrlAsOf).toBe(USD_BRL.asOf);
 
     // Com o preço do modelo novo no config.json, ele entra na conta sem reler nada.
     let prices = {};
@@ -326,6 +330,14 @@ describe('painel de dados: livro-razão de uso', () => {
     expect(priced.summary().allTime.costUsd).toBe(106.51);
     expect(priced.summary().cost.unpricedTokens).toBe(0);
     await priced.stop();
+
+    // O câmbio do config.json também vale na hora.
+    const config: { usdBrl?: number } = {};
+    const brl = new UsageLedger(db.handle, { now: () => now, usdBrl: () => config.usdBrl });
+    expect(brl.summary().cost).toMatchObject({ usdBrl: USD_BRL.rate, usdBrlAsOf: USD_BRL.asOf });
+    config.usdBrl = 5.43;
+    expect(brl.summary().cost).toMatchObject({ usdBrl: 5.43, usdBrlAsOf: null });
+    await brl.stop();
   });
 
   it('relê tudo quando o formato dos contadores muda', async () => {

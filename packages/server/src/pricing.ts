@@ -14,6 +14,19 @@ import type { TokenUsage } from './schema.js';
  */
 export const PRICES_AS_OF = '2026-11-18';
 
+/**
+ * Câmbio de referência para mostrar o custo em reais: PTAX de venda do Banco
+ * Central no dia indicado. Fica fixo no código (nada é consultado fora da
+ * máquina); o valor do dia entra por `agent-office rate <valor>`.
+ */
+export const USD_BRL = { rate: 5.7851, asOf: '2026-11-17' } as const;
+
+/** Valida o câmbio do config.json ("usdBrl"): reais por dólar. */
+export function parseUsdBrl(raw: unknown): number | undefined {
+  const v = typeof raw === 'string' ? Number(raw.replace(',', '.')) : raw;
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0.01 && v <= 1000 ? v : undefined;
+}
+
 export interface ModelPrice {
   input: number;
   output: number;

@@ -61,7 +61,7 @@ export interface AppOptions {
   /** Sessões do Claude Code na nuvem, consultadas pela CLI do Claude (opcional, experimental). */
   claudeCloud?: { settings: () => ClaudeCloudSettings; list?: ListClaudeCloud; intervalMs?: number };
   /** Painel de dados: preços por modelo vindos do config.json (lido a cada consulta). */
-  usage?: { prices?: () => PriceOverrides };
+  usage?: { prices?: () => PriceOverrides; usdBrl?: () => number | undefined };
   /** Outras máquinas cujas sessões este escritório espelha (lido a cada passo). */
   peers?: { settings: () => PeerConfig[]; deps?: PeerDeps; intervalMs?: number };
   tickMs?: number;
@@ -144,7 +144,11 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   const startedAt = Date.now();
   const store = new SessionStore(opts.store);
   const db = await HistoryDb.open(opts.dbPath);
-  const usage = new UsageLedger(db.handle, { log, ...(opts.usage?.prices ? { prices: opts.usage.prices } : {}) });
+  const usage = new UsageLedger(db.handle, {
+    log,
+    ...(opts.usage?.prices ? { prices: opts.usage.prices } : {}),
+    ...(opts.usage?.usdBrl ? { usdBrl: opts.usage.usdBrl } : {}),
+  });
   const fastify = Fastify({ logger: false, bodyLimit: 512 * 1024 });
   const wss = new WebSocketServer({ noServer: true });
 

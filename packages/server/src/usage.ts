@@ -6,7 +6,18 @@ import { join } from 'node:path';
 import type { Database, Statement } from './db.js';
 import { ClaudeTranscriptParser } from './normalize/claude.js';
 import { CodexRolloutParser, codexSessionIdFromPath } from './normalize/codex.js';
-import { PRICES_AS_OF, PRICE_KINDS, costOf, priceOf, priceVariant, splitPriceKey, type ModelPrice, type PriceKind, type PriceOverrides } from './pricing.js';
+import {
+  PRICES_AS_OF,
+  PRICE_KINDS,
+  USD_BRL,
+  costOf,
+  priceOf,
+  priceVariant,
+  splitPriceKey,
+  type ModelPrice,
+  type PriceKind,
+  type PriceOverrides,
+} from './pricing.js';
 import {
   TOOL_CATEGORIES,
   type AgentKind,
@@ -244,6 +255,8 @@ export interface UsageLedgerOptions {
   log?: (msg: string) => void;
   /** Preços por modelo vindos da configuração (completam a tabela embutida). */
   prices?: () => PriceOverrides;
+  /** Câmbio (reais por dólar) vindo da configuração; sem ele vale a referência embutida. */
+  usdBrl?: () => number | undefined;
 }
 
 export class UsageLedger extends EventEmitter<{ change: [] }> {
@@ -260,7 +273,8 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
   private stopped = false;
   private done = 0;
   private readonly prices: () => PriceOverrides | undefined;
-  private cached: { day: number; prices: PriceOverrides | undefined; value: Omit<UsageResponse, 'updatedAt' | 'scan'> } | null = null;
+  private readonly usdBrl: () => number | undefined;
+  private cached: { day: number; prices: PriceOverrides | undefined; value: Omit<UsageResponse, 'updatedAt' | 'scan' | 'cost'> & { cost: Omit<UsageResponse['cost'], 'usdBrl' | 'usdBrlAsOf'> } } | null = null;
   private dayLo = 0;
   private dayHi = 0;
 
@@ -272,6 +286,7 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     this.now = opts.now ?? Date.now;
     this.log = opts.log ?? (() => undefined);
     this.prices = opts.prices ?? (() => undefined);
+    this.usdBrl = opts.usdBrl ?? (() => undefined);
     db.exec(SCHEMA);
     if (db.prepare("SELECT value FROM usage_meta WHERE key = 'format'").get()?.value !== FORMAT) {
       const had = db.prepare('SELECT 1 AS x FROM usage_files LIMIT 1').get();
@@ -620,14 +635,16 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     if (!this.cached || this.cached.day !== today || this.cached.prices !== prices) {
       this.cached = { day: today, prices, value: this.compute(now, today, prices) };
     }
+    const custom = this.usdBrl();
     return {
       ...this.cached.value,
+      cost: { ...this.cached.value.cost, usdBrl: custom ?? USD_BRL.rate, usdBrlAsOf: custom === undefined ? USD_BRL.asOf : null },
       updatedAt: now,
       scan: { pending: this.queue.size, done: this.done, scanning: this.worker !== null && this.queue.size > 0 },
     };
   }
 
-  private compute(now: number, today: number, overrides: PriceOverrides | undefined): Omit<UsageResponse, 'updatedAt' | 'scan'> {
+  private compute(now: number, today: number, overrides: PriceOverrides | undefined): NonNullable<UsageLedger['cached']>['value'] {
     const weekStart = daysBefore(now, 6);
     const allTime = blankTotals();
     const todayTotals = blankTotals();

@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { parsePrices, type PriceOverrides } from './pricing.js';
+import { parsePrices, parseUsdBrl, type PriceOverrides } from './pricing.js';
 
 export const DEFAULT_PORT = 4747;
 export const DEMO_PORT = 4748;
@@ -147,6 +147,11 @@ export function peersReader(home: string = officeHome()): () => PeerConfig[] {
 /** Seção "prices": preços por modelo (US$ por milhão de tokens) que completam ou corrigem a tabela embutida. */
 export function pricesReader(home: string = officeHome()): () => PriceOverrides {
   return valueReader(home, 'prices', parsePrices(undefined), parsePrices);
+}
+
+/** "usdBrl": câmbio (reais por dólar) usado no custo em reais; sem ele vale a referência embutida. */
+export function usdBrlReader(home: string = officeHome()): () => number | undefined {
+  return valueReader<number | undefined>(home, 'usdBrl', undefined, parseUsdBrl);
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {

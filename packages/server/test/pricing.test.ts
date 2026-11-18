@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { costOf, parsePrices, priceOf, priceVariant, splitPriceKey } from '../src/pricing.js';
+import { USD_BRL, costOf, parsePrices, parseUsdBrl, priceOf, priceVariant, splitPriceKey } from '../src/pricing.js';
 
 const usage = (prompt: number) => ({ input: prompt, output: 10, cacheRead: 0, cacheWrite: 0 });
 
@@ -43,6 +43,17 @@ describe('tabela de preços', () => {
     expect(costOf(p, 'cr', 10_000_000)).toBe(2);
     expect(costOf(p, 'cw', 1_000_000)).toBe(10);
     expect(costOf(p, 'cw1h', 1_000_000)).toBe(16);
+  });
+
+  it('valida o câmbio do config.json', () => {
+    expect(USD_BRL.rate).toBeGreaterThan(1);
+    expect(parseUsdBrl(5.43)).toBe(5.43);
+    expect(parseUsdBrl('5,43')).toBe(5.43);
+    expect(parseUsdBrl(0)).toBeUndefined();
+    expect(parseUsdBrl(-5)).toBeUndefined();
+    expect(parseUsdBrl('caro')).toBeUndefined();
+    expect(parseUsdBrl(undefined)).toBeUndefined();
+    expect(parseUsdBrl(Number.POSITIVE_INFINITY)).toBeUndefined();
   });
 
   it('o config.json completa ou corrige a tabela', () => {

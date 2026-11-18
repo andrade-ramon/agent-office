@@ -25,6 +25,7 @@ import {
 import { currentAlert, describeAlert, disableAlert, enableAlert } from '../src/alert.js';
 import { currentCloud, disableCloud, enableCloud } from '../src/cloud.js';
 import { addPeer, listPeers, removePeer } from '../src/peers.js';
+import { currentRate, parseRate, resetRate, setRate } from '../src/rate.js';
 import { getPaths, HOOK_MARKER, readConfig, writeConfig, type Paths } from '../src/paths.js';
 import { launchdPlist, systemdUnit, windowsTaskArgs, type ServiceSpec } from '../src/service.js';
 
@@ -479,5 +480,32 @@ describe('outras máquinas (config)', () => {
     expect(addPeer(paths, { name: 'x' }).ok).toBe(false);
     expect(addPeer(paths, { name: 'x', ssh: 'host', url: 'http://127.0.0.1:1' }).ok).toBe(false);
     expect(listPeers(paths)).toEqual([]);
+  });
+});
+
+describe('câmbio do custo em reais (config)', () => {
+  it('grava, mostra e remove o câmbio sem tocar no resto do config.json', () => {
+    writeConfig(paths, { port: 4800, voiceAlert: { enabled: true, text: 'Ramon' } });
+    expect(currentRate(paths)).toBeUndefined();
+
+    expect(setRate(paths, '5,43')).toEqual({ ok: true, detail: 'US$ 1 = R$ 5,43', rate: 5.43 });
+    expect(currentRate(paths)).toBe(5.43);
+    expect(setRate(paths, 'R$ 5.7851')).toMatchObject({ ok: true, detail: 'US$ 1 = R$ 5,7851', rate: 5.7851 });
+    expect(readConfig(paths)).toMatchObject({ port: 4800, usdBrl: 5.7851, voiceAlert: { text: 'Ramon' } });
+
+    expect(resetRate(paths)).toBe(true);
+    expect(resetRate(paths)).toBe(false);
+    expect(currentRate(paths)).toBeUndefined();
+    expect(readConfig(paths)).toEqual({ port: 4800, voiceAlert: { enabled: true, text: 'Ramon' } });
+  });
+
+  it('recusa valores que não são um câmbio', () => {
+    writeConfig(paths, { port: 4800 });
+    for (const bad of ['', 'abc', '0', '-5', '5,4,3', '1e9', '5 reais']) {
+      expect(setRate(paths, bad).ok, bad).toBe(false);
+    }
+    expect(parseRate('5,43')).toBe(5.43);
+    expect(parseRate(' 6 ')).toBe(6);
+    expect(readConfig(paths)).toEqual({ port: 4800 });
   });
 });
