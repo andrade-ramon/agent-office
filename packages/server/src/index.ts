@@ -100,6 +100,7 @@ const app = await createApp({
           codexDir: join(codexHome, 'sessions'),
           claudeSessionsDir: join(claudeHome, 'sessions'),
           codexIndexFile: join(codexHome, 'session_index.jsonl'),
+          codexArchivedDir: join(codexHome, 'archived_sessions'),
         },
   store: {
     idleAfterMs: config.idleAfterMin * 60_000,

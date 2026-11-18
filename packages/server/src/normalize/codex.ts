@@ -1,4 +1,4 @@
-import type { EventMeta, EventType, Ingest, NormalizedEvent, ToolCategory } from '../schema.js';
+import type { EventMeta, EventType, Ingest, NormalizedEvent, TokenUsage, ToolCategory } from '../schema.js';
 import { humanizeSlug, isObj, num, parseTs, projectFromCwd, str } from '../util.js';
 import { categorizeTool } from './tools.js';
 
@@ -17,6 +17,20 @@ const OUTPUT_TYPES = new Set([
   'local_shell_call_output',
   'tool_search_output',
 ]);
+
+/**
+ * Acumulado de tokens da sessão. No Codex a entrada já inclui o que veio do
+ * cache e a saída já inclui o raciocínio; aqui a entrada vira só a parte nova.
+ */
+function codexUsage(raw: unknown): TokenUsage | undefined {
+  if (!isObj(raw)) return undefined;
+  const all = num(raw.input_tokens) ?? 0;
+  const cacheRead = Math.min(all, num(raw.cached_input_tokens) ?? 0);
+  const cacheWrite = Math.min(all - cacheRead, num(raw.cache_write_input_tokens) ?? 0);
+  const output = num(raw.output_tokens) ?? 0;
+  if (all + output <= 0) return undefined;
+  return { input: all - cacheRead - cacheWrite, output, cacheRead, cacheWrite };
+}
 
 /**
  * Parser incremental dos rollouts do Codex (`~/.codex/sessions/**.jsonl`).
@@ -111,14 +125,19 @@ export class CodexRolloutParser {
             const last = info && isObj(info.last_token_usage) ? info.last_token_usage : undefined;
             const tokens = last ? (num(last.total_tokens) ?? num(last.input_tokens)) : undefined;
             const window = info ? num(info.model_context_window) : undefined;
-            if (!tokens && !window) return [];
+            const usageTotal = info ? codexUsage(info.total_token_usage) : undefined;
+            if (!tokens && !window && !usageTotal) return [];
             return [
               {
                 kind: 'meta',
                 agent: 'codex',
                 sessionId: this.sessionId,
                 ts,
-                meta: { ...(tokens ? { contextTokens: tokens } : {}), ...(window ? { contextWindow: window } : {}) },
+                meta: {
+                  ...(tokens ? { contextTokens: tokens } : {}),
+                  ...(window ? { contextWindow: window } : {}),
+                  ...(usageTotal ? { usageTotal } : {}),
+                },
               },
             ];
           }

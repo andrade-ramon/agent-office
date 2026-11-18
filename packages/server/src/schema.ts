@@ -71,6 +71,24 @@ export interface EventMeta {
   url?: string;
   /** Tamanho da alteração produzida por uma sessão remota. */
   changes?: SessionChanges;
+  /** Tokens consumidos por uma resposta do modelo (só números). */
+  usage?: TokenUsage;
+  /** Id da resposta a que `usage` se refere: o transcript repete a mesma resposta em várias linhas. */
+  messageId?: string;
+  /** Tokens consumidos pela sessão inteira até aqui (o Codex informa o acumulado). */
+  usageTotal?: TokenUsage;
+}
+
+/** Contagem de tokens, separada do jeito que os agentes informam. */
+export interface TokenUsage {
+  /** Entrada nova (fora do cache). */
+  input: number;
+  /** Saída (inclui raciocínio). */
+  output: number;
+  /** Entrada lida do cache. */
+  cacheRead: number;
+  /** Entrada gravada no cache. */
+  cacheWrite: number;
 }
 
 export interface SessionChanges {
@@ -213,7 +231,8 @@ export type ServerMessage =
     }
   | { type: 'session'; session: SessionState }
   | { type: 'event'; key: string; event: NormalizedEvent }
-  | { type: 'remove'; key: string };
+  | { type: 'remove'; key: string }
+  | { type: 'usage'; usage: UsageResponse };
 
 export interface StatsResponse {
   since: number;
@@ -229,6 +248,63 @@ export interface StatsResponse {
   allTime: { events: number; sessions: number };
   /** Eventos por hora nas últimas 24h (mais antigo → mais recente). */
   hourly: { hour: number; events: number }[];
+}
+
+/** Totais acumulados de um recorte (tudo, hoje, um agente...). */
+export interface UsageTotals {
+  tokens: TokenUsage & { total: number };
+  prompts: number;
+  /** Chamadas de ferramenta. */
+  tools: number;
+  errors: number;
+  /** Sessões principais (subagentes contam à parte). */
+  sessions: number;
+  subagents: number;
+  /** Tempo em que as sessões principais estiveram trabalhando (ms, somado entre sessões). */
+  activeMs: number;
+  /** O mesmo para os subagentes. */
+  subagentActiveMs: number;
+}
+
+export interface UsageDay {
+  /** Meia-noite local do dia (ms). */
+  day: number;
+  /** Tokens por agente. */
+  claude: number;
+  codex: number;
+  prompts: number;
+  activeMs: number;
+}
+
+export interface UsageRank {
+  name: string;
+  tokens: number;
+}
+
+/**
+ * Painel de dados: o acumulado de todas as sessões desta máquina, lido dos
+ * transcripts locais. Só números, nomes de modelo e nomes de projeto.
+ */
+export interface UsageResponse {
+  /** Primeiro dia com dados (meia-noite local) ou null se ainda não há nada. */
+  since: number | null;
+  updatedAt: number;
+  allTime: UsageTotals;
+  today: UsageTotals;
+  /** Últimos 7 dias, hoje incluído. */
+  week: UsageTotals;
+  byAgent: Record<AgentKind, UsageTotals>;
+  /** Últimos 14 dias, do mais antigo para hoje. */
+  days: UsageDay[];
+  toolsByCategory: Record<ToolCategory, number>;
+  /** Modelos e projetos que mais consumiram tokens. */
+  models: UsageRank[];
+  projects: UsageRank[];
+  /** Dias com alguma atividade. */
+  activeDays: number;
+  busiestDay: { day: number; tokens: number } | null;
+  /** Leitura do histórico: arquivos na fila e já lidos nesta rodada. */
+  scan: { pending: number; done: number; scanning: boolean };
 }
 
 export interface HealthResponse {

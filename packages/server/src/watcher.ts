@@ -7,6 +7,7 @@ import { ClaudeTranscriptParser, classifyClaudePath } from './normalize/claude.j
 import { CodexRolloutParser, codexSessionIdFromPath } from './normalize/codex.js';
 import { sessionKey, type AgentKind, type Ingest } from './schema.js';
 import type { SessionStore } from './state.js';
+import type { TranscriptFile } from './usage.js';
 import { isObj, str } from './util.js';
 
 const TAIL_BYTES = 512 * 1024;
@@ -29,6 +30,7 @@ interface Tracked {
   path: string;
   /** Chave da sessão que este arquivo alimenta. */
   key: string;
+  file: TranscriptFile;
   parser: LineParser;
   offset: number;
   partial: string;
@@ -51,6 +53,8 @@ export interface WatcherOptions {
   bootstrapWindowMs: number;
   /** Força polling (usado em testes/sistemas de arquivo sem eventos). */
   usePolling?: boolean;
+  /** Chamado quando um transcript é encontrado ou cresce (alimenta o painel de dados). */
+  onFile?: (file: TranscriptFile) => void;
   log?: (msg: string) => void;
 }
 
@@ -158,19 +162,20 @@ export class TranscriptWatcher {
     agent: AgentKind,
     root: string,
     path: string,
-  ): { key: string; subagentId?: string; make: (fresh: boolean) => LineParser } | null {
+  ): { key: string; file: TranscriptFile; subagentId?: string; make: (fresh: boolean) => LineParser } | null {
     if (agent === 'claude') {
       const info = classifyClaudePath(relative(root, path));
       if (!info) return null;
       return {
         key: sessionKey('claude', info.agentId ?? info.sessionId),
+        file: { agent, path, sessionId: info.sessionId, ...(info.agentId ? { subagentId: info.agentId } : {}) },
         ...(info.agentId ? { subagentId: info.agentId } : {}),
         make: (fresh) => new ClaudeTranscriptParser(info, { fresh }),
       };
     }
     const id = codexSessionIdFromPath(path);
     if (!id) return null;
-    return { key: sessionKey('codex', id), make: () => new CodexRolloutParser(id) };
+    return { key: sessionKey('codex', id), file: { agent, path, sessionId: id }, make: () => new CodexRolloutParser(id) };
   }
 
   /** Subagentes do Claude têm um `agent-<id>.meta.json` ao lado com o tipo do agente. */
@@ -194,11 +199,13 @@ export class TranscriptWatcher {
     }
   }
 
-  private track(agent: AgentKind, path: string, key: string, parser: LineParser, offset: number): Tracked {
+  private track(file: TranscriptFile, key: string, parser: LineParser, offset: number): Tracked {
+    const { agent, path } = file;
     const t: Tracked = {
       agent,
       path,
       key,
+      file,
       parser,
       offset,
       partial: '',
@@ -248,10 +255,12 @@ export class TranscriptWatcher {
     if (!id) return;
     this.counts[agent]++;
     const size = stats?.size ?? 0;
+    // O painel de dados lê o arquivo inteiro por conta própria, inclusive os antigos.
+    this.opts.onFile?.(id.file);
 
     if (this.ready) {
       // Arquivo novo: sessão nova, lê desde o início.
-      const t = this.track(agent, path, id.key, id.make(true), 0);
+      const t = this.track(id.file, id.key, id.make(true), 0);
       await this.enqueue(t, () => this.drain(t, false));
       this.scheduleTrailing(t);
       if (id.subagentId) await this.readSubagentMeta(path, id.subagentId);
@@ -264,7 +273,7 @@ export class TranscriptWatcher {
       return;
     }
     // Sessão recente: reconstrói o estado a partir da cauda, sem emitir eventos.
-    const t = this.track(agent, path, id.key, id.make(false), 0);
+    const t = this.track(id.file, id.key, id.make(false), 0);
     await this.enqueue(t, async () => {
       const start = Math.max(0, size - TAIL_BYTES);
       if (start > 0) {
@@ -284,7 +293,7 @@ export class TranscriptWatcher {
       if (!id) return;
       // Sessão antiga retomada: segue a partir do tamanho conhecido.
       const offset = this.dormant.get(path) ?? 0;
-      t = this.track(agent, path, id.key, id.make(false), offset);
+      t = this.track(id.file, id.key, id.make(false), offset);
       const created = t;
       if (agent === 'codex' && offset > 0) void this.enqueue(created, () => this.readHead(created));
       if (id.subagentId) {
@@ -350,6 +359,7 @@ export class TranscriptWatcher {
       }
       const decoder = new StringDecoder('utf8');
       const buf = Buffer.allocUnsafe(CHUNK_BYTES);
+      const before = t.offset;
       while (t.offset < size) {
         const want = Math.min(buf.length, size - t.offset);
         const { bytesRead } = await fh.read(buf, 0, want, t.offset);
@@ -358,6 +368,7 @@ export class TranscriptWatcher {
         t.lastGrowth = Date.now();
         this.consume(t, decoder.write(buf.subarray(0, bytesRead)), replay);
       }
+      if (t.offset !== before && !replay) this.opts.onFile?.(t.file);
     } catch {
       /* arquivo sumiu ou sem permissão: tenta de novo na próxima mudança */
     } finally {

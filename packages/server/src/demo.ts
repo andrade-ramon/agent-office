@@ -2,6 +2,7 @@ import type { AgentKind, EventMeta, EventType, NormalizedEvent, ToolCategory } f
 import { CLAUDE_CLOUD_ENTRYPOINT, CLAUDE_CLOUD_URL } from './claude-cloud.js';
 import { CLOUD_ENTRYPOINT } from './codex-cloud.js';
 import type { SessionStore } from './state.js';
+import type { UsageLedger } from './usage.js';
 
 const PROJECTS = ['loja-virtual', 'api-pagamentos', 'app-mobile', 'infra-cloud', 'site-docs', 'painel-admin', 'bot-suporte'];
 
@@ -38,6 +39,12 @@ const WEIGHTS: [ToolCategory, number][] = [
   ['web', 7],
   ['other', 4],
 ];
+
+const MODELS: Record<AgentKind, string[]> = {
+  claude: ['claude-fable-5-2', 'claude-fable-5-2', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
+  codex: ['gpt-5-codex'],
+};
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const SUBAGENT_TYPES = ['Explore', 'general-purpose', 'code-reviewer', 'Plan'];
 
@@ -101,9 +108,12 @@ export class DemoSimulator {
     private readonly concurrency = 7,
     /** Multiplicador de velocidade (2 = duas vezes mais rápido). */
     private readonly speed = 1,
+    /** Painel de dados: o demo inventa um histórico e segue somando. */
+    private readonly usage?: UsageLedger,
   ) {}
 
   start(): void {
+    this.seedUsage();
     for (let i = 0; i < this.concurrency; i++) {
       void this.lane(i);
     }
@@ -115,6 +125,52 @@ export class DemoSimulator {
     this.stopped = true;
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
+  }
+
+  /** Duas semanas de números plausíveis, para o telão não começar zerado. */
+  private seedUsage(): void {
+    const usage = this.usage;
+    if (!usage) return;
+    const now = Date.now();
+    for (let back = 13; back >= 0; back--) {
+      const ts = now - back * DAY_MS;
+      const weekday = new Date(ts).getDay();
+      // Fim de semana mais calmo; hoje ainda está pela metade.
+      const load = (weekday === 0 || weekday === 6 ? 0.25 : 1) * (back === 0 ? 0.4 : 1) * rand(0.6, 1.3);
+      for (const agent of ['claude', 'codex'] as const) {
+        const share = load * (agent === 'claude' ? 1 : 0.45);
+        const tokens = {
+          in: rand(300_000, 900_000) * share,
+          out: rand(200_000, 700_000) * share,
+          cr: rand(40_000_000, 110_000_000) * share,
+          cw: agent === 'claude' ? rand(2_000_000, 7_000_000) * share : 0,
+        };
+        let total = 0;
+        for (const [metric, value] of Object.entries(tokens)) {
+          usage.record(agent, ts, metric, value);
+          total += Math.round(value);
+        }
+        const tools = rand(500, 1400) * share;
+        const weight = WEIGHTS.reduce((a, [, w]) => a + w, 0);
+        for (const [cat, w] of WEIGHTS) usage.record(agent, ts, `tool:${cat}`, (tools * w) / weight);
+        usage.record(agent, ts, 'tools', tools);
+        usage.record(agent, ts, 'prompts', rand(30, 80) * share);
+        usage.record(agent, ts, 'sessions', rand(6, 16) * share);
+        usage.record(agent, ts, 'subagents', rand(8, 30) * share);
+        usage.record(agent, ts, 'errors', rand(4, 20) * share);
+        usage.record(agent, ts, 'active', rand(2, 6) * 3_600_000 * share);
+        usage.record(agent, ts, 'subActive', rand(0.5, 2) * 3_600_000 * share);
+        const models = MODELS[agent];
+        models.forEach((model, i) => usage.record(agent, ts, `model:${model}`, total / models.length + (i === 0 ? 1 : 0)));
+        for (const project of PROJECTS) usage.record(agent, ts, `project:${project}`, (total / PROJECTS.length) * rand(0.3, 1.7));
+      }
+    }
+  }
+
+  /** Soma no painel de dados. Sessões na nuvem ficam fora, como no uso real (não têm transcript). */
+  private count(a: Actor, metric: string, value = 1): void {
+    if (this.stopped || !a.cwd) return;
+    this.usage?.record(a.agent, Date.now(), metric, value);
   }
 
   private sleep(ms: number): Promise<void> {
@@ -144,10 +200,27 @@ export class DemoSimulator {
       ...(meta ? { meta } : {}),
     };
     this.store.apply(ev);
+    if (event === 'prompt') this.count(a, 'prompts');
+    else if (event === 'error') this.count(a, 'errors');
+    else if (event === 'session_start') this.count(a, 'sessions');
+    else if (event === 'subagent_start') this.count(a, 'subagents');
+    else if (event === 'tool_start') {
+      this.count(a, 'tools');
+      this.count(a, `tool:${ev.toolCategory}`);
+    }
   }
 
   private bumpContext(a: Actor): void {
-    a.tokens = Math.min(190_000, a.tokens + Math.round(rand(800, 6000)));
+    const grew = Math.round(rand(800, 6000));
+    const spent = { in: rand(200, 1500), out: rand(150, 1800), cr: a.tokens, cw: a.agent === 'claude' ? grew : 0 };
+    let total = 0;
+    for (const [metric, value] of Object.entries(spent)) {
+      this.count(a, metric, value);
+      total += Math.round(value);
+    }
+    this.count(a, `model:${MODELS[a.agent][0]!}`, total);
+    this.count(a, `project:${a.project}`, total);
+    a.tokens = Math.min(190_000, a.tokens + grew);
     this.store.apply({
       kind: 'meta',
       agent: a.agent,
@@ -168,6 +241,7 @@ export class DemoSimulator {
   private async tool(a: Actor, category = pickCategory()): Promise<void> {
     const toolName = pick(TOOLS[a.agent][category]);
     const toolUseId = id('tool');
+    const began = Date.now();
     this.emit(a, 'tool_start', { toolName, toolCategory: category }, { toolUseId });
     if (!a.parentSessionId && Math.random() < 0.07) {
       await this.sleep(rand(600, 1500));
@@ -178,6 +252,7 @@ export class DemoSimulator {
     }
     if (Math.random() < 0.07) this.emit(a, 'error', { toolName, toolCategory: category }, { toolUseId });
     else this.emit(a, 'tool_end', { toolName, toolCategory: category }, { toolUseId });
+    this.count(a, a.parentSessionId ? 'subActive' : 'active', Date.now() - began);
     this.bumpContext(a);
   }
 

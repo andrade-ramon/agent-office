@@ -1,12 +1,12 @@
 import type { NormalizedEvent, SessionState, StatsResponse } from './schema.js';
 
 /** Subconjunto da API de `node:sqlite` que usamos. */
-interface Statement {
+export interface Statement {
   run(...params: unknown[]): unknown;
   get(...params: unknown[]): Record<string, unknown> | undefined;
   all(...params: unknown[]): Record<string, unknown>[];
 }
-interface Database {
+export interface Database {
   exec(sql: string): void;
   prepare(sql: string): Statement;
   close(): void;
@@ -89,6 +89,11 @@ export class HistoryDb {
       DatabaseSync: new (path: string) => Database;
     };
     return new HistoryDb(new sqlite.DatabaseSync(path));
+  }
+
+  /** A conexão, para quem guarda as próprias tabelas no mesmo arquivo (painel de dados). */
+  get handle(): Database {
+    return this.db;
   }
 
   recordEvent(ev: NormalizedEvent): void {

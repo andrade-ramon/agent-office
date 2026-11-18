@@ -28,6 +28,7 @@ import { CodexCloudWatcher, type CodexCloudSettings, type ListCloudTasks } from 
 import type { PeerConfig } from './config.js';
 import { PeerManager, type PeerDeps } from './peers.js';
 import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
+import { UsageLedger } from './usage.js';
 import { TranscriptWatcher } from './watcher.js';
 
 export interface AppOptions {
@@ -47,6 +48,8 @@ export interface AppOptions {
         claudeSessionsDir: string | false;
         /** `~/.codex/session_index.jsonl` (nomes das threads do Codex). */
         codexIndexFile?: string | false;
+        /** `~/.codex/archived_sessions`: só entra na conta do painel de dados. */
+        codexArchivedDir?: string | false;
         usePolling?: boolean;
       };
   store?: Partial<StoreOptions>;
@@ -66,6 +69,8 @@ export interface AgentOfficeApp {
   fastify: FastifyInstance;
   store: SessionStore;
   db: HistoryDb;
+  /** Acumulado de tokens, prompts e tempo ativo (o telão do escritório). */
+  usage: UsageLedger;
   watcher: TranscriptWatcher | null;
   /** Sobe o servidor em 127.0.0.1 e retorna a porta efetiva. */
   listen(): Promise<number>;
@@ -74,6 +79,7 @@ export interface AgentOfficeApp {
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 const DOCTOR_PREFIX = 'agent-office-doctor';
+const USAGE_PUSH_MS = 2000;
 
 function hostAllowed(host: string | undefined): boolean {
   if (!host) return false;
@@ -135,6 +141,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   const startedAt = Date.now();
   const store = new SessionStore(opts.store);
   const db = await HistoryDb.open(opts.dbPath);
+  const usage = new UsageLedger(db.handle, { log });
   const fastify = Fastify({ logger: false, bodyLimit: 512 * 1024 });
   const wss = new WebSocketServer({ noServer: true });
 
@@ -165,6 +172,22 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       log(`sqlite: ${String(err)}`);
     }
     broadcast({ type: 'event', key, event });
+  });
+
+  // Painel de dados: no máximo um aviso a cada USAGE_PUSH_MS, por mais que os números mudem.
+  let usagePush: NodeJS.Timeout | null = null;
+  let usagePushedAt = 0;
+  usage.on('change', () => {
+    if (usagePush || wss.clients.size === 0) return;
+    usagePush = setTimeout(
+      () => {
+        usagePush = null;
+        usagePushedAt = Date.now();
+        broadcast({ type: 'usage', usage: usage.summary() });
+      },
+      Math.max(0, USAGE_PUSH_MS - (Date.now() - usagePushedAt)),
+    );
+    usagePush.unref?.();
   });
 
   // ─────────── segurança: só loopback ───────────
@@ -237,6 +260,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
 
   fastify.get('/api/sessions', async () => ({ sessions: store.list() }));
   fastify.get('/api/stats', async () => db.stats());
+  fastify.get('/api/usage', async () => usage.summary());
   fastify.get('/api/history', async (req) => {
     const q = req.query as Record<string, string | undefined>;
     return { events: db.recentEvents(Number(q.limit ?? 100) || 100) };
@@ -335,6 +359,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
         codexDir: opts.watch.codexDir,
         bootstrapWindowMs: store.options.endAfterMs,
         ...(opts.watch.usePolling ? { usePolling: true } : {}),
+        onFile: (file) => usage.touch(file),
         log,
       });
       const t0 = Date.now();
@@ -349,11 +374,12 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
         codexTitles = new CodexTitleWatcher(opts.watch.codexIndexFile, store);
         await codexTitles.start();
       }
+      if (opts.watch.codexArchivedDir) void usage.touchCodexDir(opts.watch.codexArchivedDir);
       store.tick();
     }
     if (opts.demo) {
       const d = typeof opts.demo === 'object' ? opts.demo : {};
-      demo = new DemoSimulator(store, d.concurrency ?? 7, d.speed ?? 1);
+      demo = new DemoSimulator(store, d.concurrency ?? 7, d.speed ?? 1, usage);
       demo.start();
     }
   };
@@ -362,6 +388,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
     fastify,
     store,
     db,
+    usage,
     get watcher() {
       return watcher;
     },
@@ -382,10 +409,18 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
           }
         }, 30_000),
       );
-      timers.push(setInterval(() => db.prune(), 6 * 60 * 60 * 1000));
+      timers.push(
+        setInterval(() => {
+          db.prune();
+          usage.prune();
+          const archived = opts.watch ? opts.watch.codexArchivedDir : false;
+          if (archived) void usage.touchCodexDir(archived);
+        }, 6 * 60 * 60 * 1000),
+      );
       for (const t of timers) t.unref?.();
       try {
         db.prune();
+        usage.prune();
       } catch {
         /* melhor esforço */
       }
@@ -401,6 +436,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
     },
     async close() {
       for (const t of timers) clearInterval(t);
+      if (usagePush) clearTimeout(usagePush);
       demo?.stop();
       procs?.stop();
       codexTitles?.stop();
@@ -409,6 +445,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       claudeCloud?.stop();
       peers?.stop();
       await watcher?.stop();
+      await usage.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       await fastify.close();

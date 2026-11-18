@@ -93,17 +93,24 @@ export class ClaudeTranscriptParser {
       const model = str(message.model);
       const usage = isObj(message.usage) ? message.usage : undefined;
       if (usage) {
-        const tokens =
-          (num(usage.input_tokens) ?? 0) +
-          (num(usage.cache_read_input_tokens) ?? 0) +
-          (num(usage.cache_creation_input_tokens) ?? 0);
-        if (tokens > 0) {
+        const input = num(usage.input_tokens) ?? 0;
+        const cacheRead = num(usage.cache_read_input_tokens) ?? 0;
+        const cacheWrite = num(usage.cache_creation_input_tokens) ?? 0;
+        const output = num(usage.output_tokens) ?? 0;
+        const tokens = input + cacheRead + cacheWrite;
+        const messageId = str(message.id);
+        if (tokens + output > 0) {
           out.push({
             kind: 'meta',
             agent: 'claude',
             sessionId,
             ts,
-            meta: { contextTokens: tokens, ...(model && model !== '<synthetic>' ? { model } : {}) },
+            meta: {
+              ...(tokens > 0 ? { contextTokens: tokens } : {}),
+              ...(model && model !== '<synthetic>' ? { model } : {}),
+              usage: { input, output, cacheRead, cacheWrite },
+              ...(messageId ? { messageId } : {}),
+            },
           });
         }
       }
