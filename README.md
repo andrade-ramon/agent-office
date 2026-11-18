@@ -58,7 +58,7 @@ Abra **http://localhost:4747**.
 | `agent-office alert on --sound siren` | Liga o alerta sonoro: sirene, bipe ou seu nome em voz alta (veja abaixo). `off`, `test` e `status` completam. |
 | `agent-office cloud on` | Mostra também as sessões que rodam na nuvem do Codex e do Claude (veja abaixo). `off` e `status` completam. |
 | `agent-office peer add <nome> <host>` | Mostra também as sessões de outro computador seu que roda o agent-office (veja abaixo). `remove` e `status` completam. |
-| `agent-office rate <reais por dólar>` | Define o câmbio do custo em reais no painel de dados (veja abaixo). `reset` e `status` completam. |
+| `agent-office rate auto` | Câmbio do custo em reais no painel de dados: `auto` busca a cotação no Banco Central, `<reais por dólar>` usa um valor seu (veja abaixo). `reset` e `status` completam. |
 | `agent-office doctor` | Diagnóstico completo, incluindo o teste de fail-open do hook. |
 | `agent-office fix-settings` | Corrige problemas conhecidos do `~/.claude/settings.json` que fazem o Claude Code ignorar o arquivo. |
 | `agent-office uninstall` | `disconnect` + remove o serviço. `--purge` apaga `~/.agent-office`. |
@@ -187,13 +187,15 @@ A tabela de preços fica no código ([`pricing.ts`](packages/server/src/pricing.
 
 `cacheRead`, `cacheWrite` e `cacheWrite1h` são opcionais (padrão: 0,1×, 1,25× e 2× o preço de entrada).
 
-O **custo em reais** converte tudo por um câmbio só, o que aparece no topo do telão. Pelo mesmo motivo (nada é consultado fora da máquina), o agent-office não busca a cotação do dia: sem um valor seu, usa uma referência embutida no código (PTAX de venda de 17/11/2026, R$ 5,7851). Para usar outra cotação, informe quantos reais vale um dólar; vale na hora, sem reiniciar:
+O **custo em reais** converte tudo por um câmbio só, o que aparece no topo do telão. Há três formas de defini-lo, e a troca vale na hora, sem reiniciar:
 
-```bash
-agent-office rate 5,43
-```
+| Comando | Câmbio usado |
+|---|---|
+| (nada) | referência embutida no código: PTAX de venda de 17/11/2026, R$ 5,7851 |
+| `agent-office rate auto` | a PTAX de venda mais recente, buscada no Banco Central a cada 6 horas |
+| `agent-office rate 5,43` | o valor que você informar (reais por dólar) |
 
-`agent-office rate` mostra o câmbio em uso e `agent-office rate reset` volta à referência embutida.
+O modo `auto` é opcional e vem desligado porque faz uma requisição para fora: uma consulta à API pública de cotações do Banco Central (`olinda.bcb.gov.br`), que leva só o intervalo de datas pedido — nenhum dado seu. A última cotação fica guardada e continua valendo sem rede. `agent-office rate` mostra o câmbio em uso e `agent-office rate reset` volta à referência embutida.
 
 Os mesmos números estão em `GET /api/usage`.
 
@@ -292,7 +294,9 @@ O script de hook (`~/.agent-office/bin/agent-office-hook`) é **fail-open**:
 - O painel de dados lê os mesmos transcripts, também só na sua máquina, e guarda no mesmo arquivo apenas **somas por dia** (tokens, prompts, ferramentas, tempo ativo), separadas por agente, modelo e nome do projeto (a última pasta do diretório). Para não contar duas vezes, guarda por 60 dias um hash dos identificadores das linhas já somadas — nunca o conteúdo. As somas não expiram.
 - O app instalado guarda no cache do navegador apenas os arquivos da interface (HTML, JS, CSS); `/api`, `/events` e `/ws` nunca passam pelo service worker.
 - Com `agent-office peer add`, este escritório lê as sessões do agent-office de outro computador seu por um túnel SSH (de `127.0.0.1` a `127.0.0.1`). Nada passa por terceiros, e tudo o que chega de lá é conferido campo a campo antes de ser exibido.
-- Não há telemetria, CDN nem fontes remotas. A única requisição para fora é opcional e vem desligada: com `agent-office cloud on`, o servidor consulta as sessões em nuvem da sua conta pela CLI do Codex e do Claude (título e estado; no Codex, também id, ambiente e contagem de linhas alteradas).
+- Não há telemetria, CDN nem fontes remotas. As únicas requisições para fora são opcionais e vêm desligadas:
+  - com `agent-office cloud on`, o servidor consulta as sessões em nuvem da sua conta pela CLI do Codex e do Claude (título e estado; no Codex, também id, ambiente e contagem de linhas alteradas);
+  - com `agent-office rate auto`, o servidor busca a cotação do dólar na API pública do Banco Central, a cada 6 horas. A consulta não leva nenhum dado seu.
 
 ## Sobre os hooks de cada agente
 
