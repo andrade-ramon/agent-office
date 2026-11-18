@@ -97,6 +97,8 @@ export class ClaudeTranscriptParser {
         const cacheRead = num(usage.cache_read_input_tokens) ?? 0;
         const cacheWrite = num(usage.cache_creation_input_tokens) ?? 0;
         const output = num(usage.output_tokens) ?? 0;
+        const creation = isObj(usage.cache_creation) ? usage.cache_creation : undefined;
+        const cacheWrite1h = Math.min(cacheWrite, (creation ? num(creation.ephemeral_1h_input_tokens) : undefined) ?? 0);
         const tokens = input + cacheRead + cacheWrite;
         const messageId = str(message.id);
         if (tokens + output > 0) {
@@ -108,7 +110,8 @@ export class ClaudeTranscriptParser {
             meta: {
               ...(tokens > 0 ? { contextTokens: tokens } : {}),
               ...(model && model !== '<synthetic>' ? { model } : {}),
-              usage: { input, output, cacheRead, cacheWrite },
+              usage: { input, output, cacheRead, cacheWrite, ...(cacheWrite1h > 0 ? { cacheWrite1h } : {}) },
+              ...(usage.speed === 'fast' ? { usageFast: true } : {}),
               ...(messageId ? { messageId } : {}),
             },
           });

@@ -110,7 +110,9 @@ describe('painel de dados: livro-razão de uso', () => {
     // 10 s + 2 s + 18 s, a pausa de 10 min conta só o teto, e mais 20 s do segundo turno.
     expect(s.allTime.activeMs).toBe(30_000 + ACTIVE_GAP_MS + 20_000);
     expect(s.toolsByCategory.bash).toBe(1);
-    expect(s.models).toEqual([{ name: 'claude-fable-5-2', tokens: 3224 }]);
+    // Fable 5.2: entrada US$ 8, saída US$ 40, cache lido US$ 0,20 e gravado (5 min) US$ 10 por milhão.
+    const usd = (111 * 8 + 61 * 40 + 3001 * 0.2 + 51 * 10) / 1e6;
+    expect(s.models).toEqual([{ name: 'claude-fable-5-2', tokens: 3224, costUsd: Math.round(usd * 100) / 100 }]);
     expect(s.projects).toEqual([{ name: 'loja', tokens: 3224 }]);
     expect(s.byAgent.claude.tokens.total).toBe(3224);
     expect(s.byAgent.codex.tokens.total).toBe(0);
@@ -227,7 +229,7 @@ describe('painel de dados: livro-razão de uso', () => {
       const s = ledger.summary();
       expect(s.byAgent.codex.tokens).toEqual({ input: 500, output: 120, cacheRead: 2000, cacheWrite: 0, total: 2620 });
       expect(s.byAgent.codex).toMatchObject({ prompts: 1, tools: 1, sessions: 1, activeMs: 20_000 });
-      expect(s.models).toEqual([{ name: 'gpt-5-codex', tokens: 2620 }]);
+      expect(s.models).toMatchObject([{ name: 'gpt-5-codex', tokens: 2620 }]);
       expect(s.projects).toEqual([{ name: 'api', tokens: 2620 }]);
     };
     check();
@@ -247,8 +249,8 @@ describe('painel de dados: livro-razão de uso', () => {
     ledger.record('claude', dayAgo(3), 'active', 60_000);
     ledger.record('claude', dayAgo(10), 'cw', 1000);
     ledger.record('claude', dayAgo(40), 'in', 10_000);
-    ledger.record('claude', dayAgo(40), 'model:antigo', 10_000);
-    ledger.record('claude', dayAgo(0), 'model:novo', 15);
+    ledger.record('claude', dayAgo(40), 'model:antigo|in', 10_000);
+    ledger.record('claude', dayAgo(0), 'model:novo|out', 15);
 
     const s = ledger.summary();
     expect(s.today.tokens.total).toBe(15);
@@ -266,6 +268,85 @@ describe('painel de dados: livro-razão de uso', () => {
     expect(s.busiestDay?.tokens).toBe(10_000);
     expect(s.models.map((m) => m.name)).toEqual(['antigo', 'novo']);
     expect(s.scan).toEqual({ pending: 0, done: 0, scanning: false });
+  });
+
+  it('estima o custo pelo preço de tabela de cada modelo, tipo de token e modo', async () => {
+    const reply = (id: string, model: string, usage: Record<string, unknown>): string =>
+      jsonl({
+        type: 'assistant',
+        uuid: uuid(),
+        sessionId: SID,
+        cwd: '/Users/ana/github/loja',
+        timestamp: at(10),
+        message: { id, role: 'assistant', model, stop_reason: 'end_turn', usage, content: [{ type: 'text', text: 'ok' }] },
+      });
+    const file = claudeFile('custo.jsonl');
+    writeFileSync(
+      file.path,
+      prompt(at(9, 59)) +
+        // Fable 5.2: 1 mi de entrada (8) + 100 mil de saída (4) + 10 mi de cache lido (2)
+        // + 500 mil gravados por 5 min (5) + 1,5 mi gravados por 1 h (24) = US$ 43
+        reply('m1', 'claude-fable-5-2', {
+          input_tokens: 1_000_000,
+          output_tokens: 100_000,
+          cache_read_input_tokens: 10_000_000,
+          cache_creation_input_tokens: 2_000_000,
+          cache_creation: { ephemeral_5m_input_tokens: 500_000, ephemeral_1h_input_tokens: 1_500_000 },
+        }) +
+        // Opus 5 em modo rápido custa o dobro: 1 mi de entrada (10) + 1 mi de saída (50) = US$ 60
+        reply('m2', 'claude-opus-5', { input_tokens: 1_000_000, output_tokens: 1_000_000, speed: 'fast' }) +
+        // Haiku 5.5 com prompt acima de 100 mil tokens: 200 mil de cache lido a 0,05 = US$ 0,01
+        reply('m3', 'claude-haiku-5-5', { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 200_000 }) +
+        // ...e abaixo do limite: 1 mi de saída a 0,50 = US$ 0,50
+        reply('m4', 'claude-haiku-5-5', { input_tokens: 10, output_tokens: 1_000_000 }) +
+        // Modelo fora da tabela: entra nos tokens, não no custo.
+        reply('m5', 'modelo-novo-9', { input_tokens: 3_000_000, output_tokens: 0 }),
+    );
+    await ledger.scan(file);
+
+    const s = ledger.summary();
+    expect(s.allTime.costUsd).toBe(103.51);
+    expect(s.today.costUsd).toBe(103.51);
+    expect(s.byAgent.claude.costUsd).toBe(103.51);
+    expect(s.byAgent.codex.costUsd).toBe(0);
+    expect(Object.fromEntries(s.models.map((m) => [m.name, m.costUsd]))).toEqual({
+      'claude-fable-5-2': 43,
+      'claude-opus-5': 60,
+      'claude-haiku-5-5': 0.51,
+      'modelo-novo-9': 0,
+    });
+    expect(s.cost).toMatchObject({ unpricedTokens: 3_000_000, unpriced: [{ name: 'modelo-novo-9', tokens: 3_000_000 }] });
+    expect(s.cost.pricesAsOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    // Com o preço do modelo novo no config.json, ele entra na conta sem reler nada.
+    let prices = {};
+    const priced = new UsageLedger(db.handle, { now: () => now, prices: () => prices });
+    expect(priced.summary().allTime.costUsd).toBe(103.51);
+    prices = { 'modelo-novo-9': { input: 1, output: 4, cacheRead: 0.1, cacheWrite: 1.25, cacheWrite1h: 2 } };
+    expect(priced.summary().allTime.costUsd).toBe(106.51);
+    expect(priced.summary().cost.unpricedTokens).toBe(0);
+    await priced.stop();
+  });
+
+  it('relê tudo quando o formato dos contadores muda', async () => {
+    const file = claudeFile('a.jsonl');
+    writeFileSync(file.path, session().join(''));
+    await ledger.scan(file);
+    expect(ledger.summary().allTime.prompts).toBe(2);
+
+    // Banco gravado por uma versão anterior.
+    db.handle.exec("UPDATE usage_meta SET value = '1' WHERE key = 'format'");
+    const upgraded = new UsageLedger(db.handle, { now: () => now });
+    expect(upgraded.summary().allTime.prompts).toBe(0);
+    await upgraded.scan(file);
+    expect(upgraded.summary().allTime).toMatchObject({ prompts: 2, sessions: 1 });
+    expect(upgraded.summary().allTime.tokens.total).toBe(3224);
+
+    // No formato atual, nada é descartado ao reabrir.
+    const reopened = new UsageLedger(db.handle, { now: () => now });
+    expect(reopened.summary().allTime.prompts).toBe(2);
+    await upgraded.stop();
+    await reopened.stop();
   });
 
   it('os parsers informam o consumo sem carregar conteúdo', () => {

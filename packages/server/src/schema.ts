@@ -75,6 +75,8 @@ export interface EventMeta {
   usage?: TokenUsage;
   /** Id da resposta a que `usage` se refere: o transcript repete a mesma resposta em várias linhas. */
   messageId?: string;
+  /** A resposta rodou em modo rápido (mesmos tokens, preço maior). */
+  usageFast?: boolean;
   /** Tokens consumidos pela sessão inteira até aqui (o Codex informa o acumulado). */
   usageTotal?: TokenUsage;
 }
@@ -89,6 +91,8 @@ export interface TokenUsage {
   cacheRead: number;
   /** Entrada gravada no cache. */
   cacheWrite: number;
+  /** Parte de `cacheWrite` que foi para o cache de 1 hora (mais cara que a de 5 minutos). */
+  cacheWrite1h?: number;
 }
 
 export interface SessionChanges {
@@ -252,7 +256,9 @@ export interface StatsResponse {
 
 /** Totais acumulados de um recorte (tudo, hoje, um agente...). */
 export interface UsageTotals {
-  tokens: TokenUsage & { total: number };
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  /** Custo estimado em dólares, a preço de tabela das APIs (só dos modelos com preço conhecido). */
+  costUsd: number;
   prompts: number;
   /** Chamadas de ferramenta. */
   tools: number;
@@ -279,6 +285,8 @@ export interface UsageDay {
 export interface UsageRank {
   name: string;
   tokens: number;
+  /** Custo estimado (só nos modelos). */
+  costUsd?: number;
 }
 
 /**
@@ -300,6 +308,8 @@ export interface UsageResponse {
   /** Modelos e projetos que mais consumiram tokens. */
   models: UsageRank[];
   projects: UsageRank[];
+  /** Sobre a estimativa de custo: data da tabela de preços e o que ficou sem preço. */
+  cost: { pricesAsOf: string; unpricedTokens: number; unpriced: UsageRank[] };
   /** Dias com alguma atividade. */
   activeDays: number;
   busiestDay: { day: number; tokens: number } | null;

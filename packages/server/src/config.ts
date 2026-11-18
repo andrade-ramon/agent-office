@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { parsePrices, type PriceOverrides } from './pricing.js';
 
 export const DEFAULT_PORT = 4747;
 export const DEMO_PORT = 4748;
@@ -141,6 +142,11 @@ export function peersReader(home: string = officeHome()): () => PeerConfig[] {
     }
     return peers;
   });
+}
+
+/** Seção "prices": preços por modelo (US$ por milhão de tokens) que completam ou corrigem a tabela embutida. */
+export function pricesReader(home: string = officeHome()): () => PriceOverrides {
+  return valueReader(home, 'prices', parsePrices(undefined), parsePrices);
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {

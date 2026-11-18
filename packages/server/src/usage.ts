@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { Database, Statement } from './db.js';
 import { ClaudeTranscriptParser } from './normalize/claude.js';
 import { CodexRolloutParser, codexSessionIdFromPath } from './normalize/codex.js';
+import { PRICES_AS_OF, PRICE_KINDS, costOf, priceOf, priceVariant, splitPriceKey, type ModelPrice, type PriceKind, type PriceOverrides } from './pricing.js';
 import {
   TOOL_CATEGORIES,
   type AgentKind,
@@ -58,7 +59,18 @@ CREATE TABLE IF NOT EXISTS usage_seen (
   h INTEGER PRIMARY KEY,
   day INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS usage_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
+
+/**
+ * Formato dos contadores. Ao mudar, o que já foi somado é descartado e os
+ * transcripts são lidos de novo (v2: tokens por modelo separados por tipo,
+ * para estimar o custo).
+ */
+const FORMAT = '2';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CHUNK_BYTES = 1024 * 1024;
@@ -74,6 +86,7 @@ export const ACTIVE_GAP_MS = 5 * 60_000;
 /** Por quanto tempo lembrar das linhas já contadas (histórico copiado entre arquivos). */
 const SEEN_DAYS = 60;
 const RANK_SIZE = 5;
+const MODELS_SIZE = 20;
 const DAYS_SHOWN = 14;
 const MAX_PARSE_CHARS = 4 * 1024 * 1024;
 const MAX_PARSERS = 200;
@@ -127,7 +140,12 @@ function diff(now: TokenUsage, before: TokenUsage): TokenUsage {
     output: Math.max(0, now.output - before.output),
     cacheRead: Math.max(0, now.cacheRead - before.cacheRead),
     cacheWrite: Math.max(0, now.cacheWrite - before.cacheWrite),
+    cacheWrite1h: Math.max(0, (now.cacheWrite1h ?? 0) - (before.cacheWrite1h ?? 0)),
   };
+}
+
+function cents(usd: number): number {
+  return Math.round(usd * 100) / 100;
 }
 
 function hash64(text: string): bigint {
@@ -141,6 +159,7 @@ function n(v: unknown): number {
 function blankTotals(): UsageTotals {
   return {
     tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    costUsd: 0,
     prompts: 0,
     tools: 0,
     errors: 0,
@@ -208,11 +227,11 @@ function daysBefore(ts: number, days: number): number {
   return d.getTime();
 }
 
-function top(map: Map<string, number>): UsageRank[] {
+function top(map: Map<string, number>, size = RANK_SIZE): UsageRank[] {
   return [...map]
     .filter(([, tokens]) => tokens > 0)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, RANK_SIZE)
+    .slice(0, size)
     .map(([name, tokens]) => ({ name, tokens }));
 }
 
@@ -223,6 +242,8 @@ function tick(): Promise<void> {
 export interface UsageLedgerOptions {
   now?: () => number;
   log?: (msg: string) => void;
+  /** Preços por modelo vindos da configuração (completam a tabela embutida). */
+  prices?: () => PriceOverrides;
 }
 
 export class UsageLedger extends EventEmitter<{ change: [] }> {
@@ -238,7 +259,8 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
   private worker: Promise<void> | null = null;
   private stopped = false;
   private done = 0;
-  private cached: { day: number; value: Omit<UsageResponse, 'updatedAt' | 'scan'> } | null = null;
+  private readonly prices: () => PriceOverrides | undefined;
+  private cached: { day: number; prices: PriceOverrides | undefined; value: Omit<UsageResponse, 'updatedAt' | 'scan'> } | null = null;
   private dayLo = 0;
   private dayHi = 0;
 
@@ -249,7 +271,14 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     super();
     this.now = opts.now ?? Date.now;
     this.log = opts.log ?? (() => undefined);
+    this.prices = opts.prices ?? (() => undefined);
     db.exec(SCHEMA);
+    if (db.prepare("SELECT value FROM usage_meta WHERE key = 'format'").get()?.value !== FORMAT) {
+      const had = db.prepare('SELECT 1 AS x FROM usage_files LIMIT 1').get();
+      db.exec('DELETE FROM usage_counters; DELETE FROM usage_files; DELETE FROM usage_seen;');
+      db.prepare("INSERT INTO usage_meta (key, value) VALUES ('format', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(FORMAT);
+      if (had) this.log('painel de dados: formato novo dos contadores, relendo os transcripts');
+    }
     this.addStmt = db.prepare(
       `INSERT INTO usage_counters (day, agent, metric, value) VALUES (?, ?, ?, ?)
        ON CONFLICT(day, agent, metric) DO UPDATE SET value = value + excluded.value`,
@@ -447,18 +476,27 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
       const meta = item.meta;
       if (meta.model) st.model = meta.model;
       let used: TokenUsage | null = null;
-      if (meta.usage) used = this.claudeUsage(scan, meta.usage, meta.messageId);
-      else if (meta.usageTotal) used = codexUsage(st, meta.usageTotal);
+      let variant = '';
+      if (meta.usage) {
+        used = this.claudeUsage(scan, meta.usage, meta.messageId);
+        variant = priceVariant(st.model, meta.usage, meta.usageFast === true);
+      } else if (meta.usageTotal) used = codexUsage(st, meta.usageTotal);
       if (!used) return;
       this.countSession(scan, ts);
       this.active(scan, ts);
-      const total = sum(used);
       this.add(scan, ts, 'in', used.input);
       this.add(scan, ts, 'out', used.output);
       this.add(scan, ts, 'cr', used.cacheRead);
       this.add(scan, ts, 'cw', used.cacheWrite);
-      this.add(scan, ts, `model:${clip(st.model) || 'desconhecido'}`, total);
-      this.add(scan, ts, `project:${clip(st.project) || 'desconhecido'}`, total);
+      // Por modelo, separado pelo tipo de cobrança (o custo é calculado na consulta, com a tabela de preços).
+      const model = `model:${clip(st.model) || 'desconhecido'}${variant}`;
+      const hour = Math.min(used.cacheWrite, used.cacheWrite1h ?? 0);
+      this.add(scan, ts, `${model}|in`, used.input);
+      this.add(scan, ts, `${model}|out`, used.output);
+      this.add(scan, ts, `${model}|cr`, used.cacheRead);
+      this.add(scan, ts, `${model}|cw`, used.cacheWrite - hour);
+      this.add(scan, ts, `${model}|cw1h`, hour);
+      this.add(scan, ts, `project:${clip(st.project) || 'desconhecido'}`, sum(used));
       return;
     }
 
@@ -491,6 +529,7 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
         output: Math.max(usage.output, st.msg.output),
         cacheRead: Math.max(usage.cacheRead, st.msg.cacheRead),
         cacheWrite: Math.max(usage.cacheWrite, st.msg.cacheWrite),
+        cacheWrite1h: Math.max(usage.cacheWrite1h ?? 0, st.msg.cacheWrite1h ?? 0),
       };
       return sum(extra) > 0 ? extra : null;
     }
@@ -577,7 +616,10 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
 
   summary(now: number = this.now()): UsageResponse {
     const today = startOfDay(now);
-    if (!this.cached || this.cached.day !== today) this.cached = { day: today, value: this.compute(now, today) };
+    const prices = this.prices();
+    if (!this.cached || this.cached.day !== today || this.cached.prices !== prices) {
+      this.cached = { day: today, prices, value: this.compute(now, today, prices) };
+    }
     return {
       ...this.cached.value,
       updatedAt: now,
@@ -585,7 +627,7 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     };
   }
 
-  private compute(now: number, today: number): Omit<UsageResponse, 'updatedAt' | 'scan'> {
+  private compute(now: number, today: number, overrides: PriceOverrides | undefined): Omit<UsageResponse, 'updatedAt' | 'scan'> {
     const weekStart = daysBefore(now, 6);
     const allTime = blankTotals();
     const todayTotals = blankTotals();
@@ -598,6 +640,9 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     }
     const toolsByCategory = Object.fromEntries(TOOL_CATEGORIES.map((c) => [c, 0])) as Record<ToolCategory, number>;
     const models = new Map<string, number>();
+    const modelCost = new Map<string, number>();
+    const unpriced = new Map<string, number>();
+    const priceCache = new Map<string, ModelPrice | null>();
     const projects = new Map<string, number>();
     const tokensByDay = new Map<number, number>();
     const activeDays = new Set<number>();
@@ -612,8 +657,30 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
       if (colon > 0) {
         const kind = metric.slice(0, colon);
         const name = metric.slice(colon + 1);
-        if (kind === 'model') models.set(name, (models.get(name) ?? 0) + value);
-        else if (kind === 'project') projects.set(name, (projects.get(name) ?? 0) + value);
+        if (kind === 'model') {
+          // "modelo[+variante]|tipo": soma os tokens do modelo e o custo pelo preço de tabela.
+          const bar = name.lastIndexOf('|');
+          const priceKind = name.slice(bar + 1) as PriceKind;
+          if (bar <= 0 || !PRICE_KINDS.includes(priceKind)) continue;
+          const key = name.slice(0, bar);
+          const model = splitPriceKey(key).model;
+          models.set(model, (models.get(model) ?? 0) + value);
+          let price = priceCache.get(key);
+          if (price === undefined) {
+            price = priceOf(key, overrides);
+            priceCache.set(key, price);
+          }
+          if (!price) {
+            unpriced.set(model, (unpriced.get(model) ?? 0) + value);
+            continue;
+          }
+          const usd = costOf(price, priceKind, value);
+          modelCost.set(model, (modelCost.get(model) ?? 0) + usd);
+          allTime.costUsd += usd;
+          byAgent[agent].costUsd += usd;
+          if (day === today) todayTotals.costUsd += usd;
+          if (day >= weekStart) week.costUsd += usd;
+        } else if (kind === 'project') projects.set(name, (projects.get(name) ?? 0) + value);
         else if (kind === 'tool' && name in toolsByCategory) toolsByCategory[name as ToolCategory] += value;
         continue;
       }
@@ -638,6 +705,9 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     for (const [day, tokens] of tokensByDay) {
       if (!busiestDay || tokens > busiestDay.tokens) busiestDay = { day, tokens };
     }
+    for (const t of [allTime, todayTotals, week, byAgent.claude, byAgent.codex]) t.costUsd = cents(t.costUsd);
+    let unpricedTokens = 0;
+    for (const tokens of unpriced.values()) unpricedTokens += tokens;
     return {
       since,
       allTime,
@@ -646,8 +716,10 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
       byAgent,
       days: [...days.values()],
       toolsByCategory,
-      models: top(models),
+      // Todos os modelos (são poucos): o mais usado em tokens nem sempre é o mais caro.
+      models: top(models, MODELS_SIZE).map((m) => ({ ...m, costUsd: cents(modelCost.get(m.name) ?? 0) })),
       projects: top(projects),
+      cost: { pricesAsOf: PRICES_AS_OF, unpricedTokens, unpriced: top(unpriced) },
       activeDays: activeDays.size,
       busiestDay,
     };
@@ -691,7 +763,13 @@ function blankState(file: TranscriptFile): FileState {
 
 function usageOf(raw: unknown): TokenUsage | null {
   if (!isObj(raw)) return null;
-  return { input: n(raw.input), output: n(raw.output), cacheRead: n(raw.cacheRead), cacheWrite: n(raw.cacheWrite) };
+  return {
+    input: n(raw.input),
+    output: n(raw.output),
+    cacheRead: n(raw.cacheRead),
+    cacheWrite: n(raw.cacheWrite),
+    cacheWrite1h: n(raw.cacheWrite1h),
+  };
 }
 
 function parseState(raw: unknown, file: TranscriptFile): FileState {

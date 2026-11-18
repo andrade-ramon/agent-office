@@ -28,6 +28,7 @@ import { CodexCloudWatcher, type CodexCloudSettings, type ListCloudTasks } from 
 import type { PeerConfig } from './config.js';
 import { PeerManager, type PeerDeps } from './peers.js';
 import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
+import type { PriceOverrides } from './pricing.js';
 import { UsageLedger } from './usage.js';
 import { TranscriptWatcher } from './watcher.js';
 
@@ -59,6 +60,8 @@ export interface AppOptions {
   codexCloud?: { settings: () => CodexCloudSettings; list?: ListCloudTasks; intervalMs?: number };
   /** Sessões do Claude Code na nuvem, consultadas pela CLI do Claude (opcional, experimental). */
   claudeCloud?: { settings: () => ClaudeCloudSettings; list?: ListClaudeCloud; intervalMs?: number };
+  /** Painel de dados: preços por modelo vindos do config.json (lido a cada consulta). */
+  usage?: { prices?: () => PriceOverrides };
   /** Outras máquinas cujas sessões este escritório espelha (lido a cada passo). */
   peers?: { settings: () => PeerConfig[]; deps?: PeerDeps; intervalMs?: number };
   tickMs?: number;
@@ -141,7 +144,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   const startedAt = Date.now();
   const store = new SessionStore(opts.store);
   const db = await HistoryDb.open(opts.dbPath);
-  const usage = new UsageLedger(db.handle, { log });
+  const usage = new UsageLedger(db.handle, { log, ...(opts.usage?.prices ? { prices: opts.usage.prices } : {}) });
   const fastify = Fastify({ logger: false, bodyLimit: 512 * 1024 });
   const wss = new WebSocketServer({ noServer: true });
 

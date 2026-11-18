@@ -41,8 +41,8 @@ const WEIGHTS: [ToolCategory, number][] = [
 ];
 
 const MODELS: Record<AgentKind, string[]> = {
-  claude: ['claude-fable-5-2', 'claude-fable-5-2', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
-  codex: ['gpt-5-codex'],
+  claude: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-fable-5-2', 'claude-haiku-5-5'],
+  codex: ['gpt-6.1-sol'],
 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -146,9 +146,12 @@ export class DemoSimulator {
           cw: agent === 'claude' ? rand(2_000_000, 7_000_000) * share : 0,
         };
         let total = 0;
+        const models = MODELS[agent];
         for (const [metric, value] of Object.entries(tokens)) {
           usage.record(agent, ts, metric, value);
           total += Math.round(value);
+          // por modelo e tipo de cobrança, para o custo estimado
+          models.forEach((model, i) => usage.record(agent, ts, `model:${model}|${metric}`, (value * (models.length - i)) / ((models.length * (models.length + 1)) / 2)));
         }
         const tools = rand(500, 1400) * share;
         const weight = WEIGHTS.reduce((a, [, w]) => a + w, 0);
@@ -160,8 +163,6 @@ export class DemoSimulator {
         usage.record(agent, ts, 'errors', rand(4, 20) * share);
         usage.record(agent, ts, 'active', rand(2, 6) * 3_600_000 * share);
         usage.record(agent, ts, 'subActive', rand(0.5, 2) * 3_600_000 * share);
-        const models = MODELS[agent];
-        models.forEach((model, i) => usage.record(agent, ts, `model:${model}`, total / models.length + (i === 0 ? 1 : 0)));
         for (const project of PROJECTS) usage.record(agent, ts, `project:${project}`, (total / PROJECTS.length) * rand(0.3, 1.7));
       }
     }
@@ -216,9 +217,9 @@ export class DemoSimulator {
     let total = 0;
     for (const [metric, value] of Object.entries(spent)) {
       this.count(a, metric, value);
+      this.count(a, `model:${MODELS[a.agent][0]!}|${metric}`, value);
       total += Math.round(value);
     }
-    this.count(a, `model:${MODELS[a.agent][0]!}`, total);
     this.count(a, `project:${a.project}`, total);
     a.tokens = Math.min(190_000, a.tokens + grew);
     this.store.apply({
