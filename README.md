@@ -219,10 +219,9 @@ O demo usa outra porta (4748), não lê seus transcripts e não grava histórico
 - **Painel** (ou `P`, ou um clique no telão) aproxima a câmera do [painel de dados](#painel-de-dados).
 - Filtros por agente e por projeto, lista lateral de sessões, modo compacto e tela cheia.
 - **Modo pato** (botão do pato ou tecla `Q`): os agentes viram patos desenvolvedores — penas coloridas, moletom na cor do agente, óculos escuros, fone de ouvido ou gorro — e os subagentes viram patinhos da mesma cor. Vale também para os retratos da lista e fica salvo.
+- Quem está **aguardando você** (pergunta ou pedido de permissão) ganha balão, anel pulsante, destaque na lista e contador no título da aba. Notificações de desktop são opcionais.
 
 ![O escritório no modo pato: patos de moletom, óculos escuros, fone e gorro trabalhando nas mesas e na bancada da nuvem](docs/patos.png)
-
-- Quem está **aguardando você** (pergunta ou pedido de permissão) ganha balão, anel pulsante, destaque na lista e contador no título da aba. Notificações de desktop são opcionais.
 
 ### O que cada lugar significa
 
