@@ -150,6 +150,12 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
     }
   }, []);
 
+  const toggleDuck = useCallback(() => {
+    const on = !prefsRef.current.duck;
+    update({ duck: on });
+    toast(on ? 'Modo pato ligado. Quack!' : 'Modo pato desligado.', 'ok');
+  }, [toast, update]);
+
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -196,10 +202,15 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
         if (!p.notify) return;
         if (kind === 'done' && !p.notifyDone) return;
         if (!document.hidden && document.hasFocus()) return;
-        showNotification(session, kind, () => {
-          setSelectedKey(session.key);
-          sceneRef.current?.focusOn(session.key);
-        });
+        showNotification(
+          session,
+          kind,
+          () => {
+            setSelectedKey(session.key);
+            sceneRef.current?.focusOn(session.key);
+          },
+          p.duck,
+        );
       },
     });
   }, [store]);
@@ -241,6 +252,9 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
         case 'a':
           update({ areas: !p.areas });
           break;
+        case 'q':
+          toggleDuck();
+          break;
         case '0':
           sceneRef.current?.fit();
           break;
@@ -262,7 +276,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleBoard, toggleFullscreen, update]);
+  }, [toggleBoard, toggleDuck, toggleFullscreen, update]);
 
   const onReady = useCallback((scene: OfficeScene | null) => {
     sceneRef.current = scene;
@@ -315,6 +329,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             projects={projects}
             agentCounts={agentCounts}
             selectedKey={selectedKey}
+            duck={prefs.duck}
             now={now}
             onAgent={(agent: AgentFilter) => update({ agent })}
             onProject={(project: string) => update({ project })}
@@ -343,6 +358,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             project={prefs.project}
             labels={prefs.labels}
             areas={prefs.areas}
+            duck={prefs.duck}
             timeMode={prefs.timeMode}
             insetRight={selected ? prefs.detailWidth : 0}
             onSelect={setSelectedKey}
@@ -417,6 +433,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             timeMode={prefs.timeMode}
             areas={prefs.areas}
             labels={prefs.labels}
+            duck={prefs.duck}
             hasSelection={Boolean(selected)}
             onZoom={(steps) => sceneRef.current?.zoomBy(steps)}
             onFit={() => sceneRef.current?.fit()}
@@ -427,6 +444,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
             onTimeMode={(timeMode: TimeMode) => update({ timeMode })}
             onToggleAreas={() => update({ areas: !prefs.areas })}
             onToggleLabels={() => update({ labels: !prefs.labels })}
+            onToggleDuck={toggleDuck}
           />
 
           {selected && (
@@ -435,6 +453,7 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
               parent={parent}
               subagents={subagents}
               demo={state.demo}
+              duck={prefs.duck}
               now={now}
               following={camera?.mode === 'follow' && camera.followKey === selected.key}
               onClose={() => setSelectedKey(null)}

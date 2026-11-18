@@ -10,6 +10,7 @@ interface Props {
   timeMode: TimeMode;
   areas: boolean;
   labels: boolean;
+  duck: boolean;
   hasSelection: boolean;
   onZoom(steps: number): void;
   onFit(): void;
@@ -19,6 +20,7 @@ interface Props {
   onTimeMode(mode: TimeMode): void;
   onToggleAreas(): void;
   onToggleLabels(): void;
+  onToggleDuck(): void;
 }
 
 const TIME_ICON: Record<TimeMode, IconName> = {
@@ -56,6 +58,15 @@ export function Hud(p: Props): ReactElement {
           aria-pressed={p.areas}
         >
           <Icon name="help" size={12} />
+        </button>
+        <button
+          type="button"
+          className={`tool ${p.duck ? 'on' : ''}`}
+          onClick={p.onToggleDuck}
+          title="Modo pato: os agentes viram patos desenvolvedores (Q)"
+          aria-pressed={p.duck}
+        >
+          <Icon name="duck" size={12} />
         </button>
         <button
           type="button"

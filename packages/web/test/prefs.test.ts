@@ -26,6 +26,15 @@ describe('preferências da interface', () => {
     expect(loadPrefs()).toEqual(DEFAULT_PREFS);
   });
 
+  it('lembra do modo pato, que começa desligado', () => {
+    const data = stubStorage();
+    expect(loadPrefs().duck).toBe(false);
+    savePrefs({ ...DEFAULT_PREFS, duck: true });
+    expect(loadPrefs().duck).toBe(true);
+    data.set(KEY, JSON.stringify({ duck: 'quack' }));
+    expect(loadPrefs().duck).toBe(false);
+  });
+
   it('guarda e limita a largura dos painéis laterais', () => {
     const data = stubStorage();
     savePrefs({ ...DEFAULT_PREFS, sidebarWidth: 340, detailWidth: 480 });

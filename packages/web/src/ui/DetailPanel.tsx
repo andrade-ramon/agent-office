@@ -22,6 +22,8 @@ interface Props {
   parent: SessionState | null;
   subagents: SessionState[];
   demo: boolean;
+  /** Modo pato: os retratos acompanham a cena. */
+  duck: boolean;
   now: number;
   following: boolean;
   onClose(): void;
@@ -47,10 +49,10 @@ function Field({ label, children, mono }: { label: string; children: ReactNode; 
   );
 }
 
-function PersonLink({ session, onSelect }: { session: SessionState; onSelect(key: string): void }): ReactElement {
+function PersonLink({ session, duck, onSelect }: { session: SessionState; duck: boolean; onSelect(key: string): void }): ReactElement {
   return (
     <button type="button" className="person" onClick={() => onSelect(session.key)}>
-      <Avatar session={session} size={24} />
+      <Avatar session={session} size={24} duck={duck} />
       <span className="person-name">{session.label}</span>
       <StatusChip status={session.status} />
     </button>
@@ -67,7 +69,7 @@ export function DetailPanel(p: Props): ReactElement {
   return (
     <aside className={`detail detail-${s.agent}`} aria-label={`Detalhes de ${s.label}`}>
       <header className="detail-head">
-        <Avatar session={s} size={48} />
+        <Avatar session={s} size={48} duck={p.duck} />
         <div className="detail-title">
           <h2>{s.label}</h2>
           <div className="detail-tags">
@@ -215,7 +217,7 @@ export function DetailPanel(p: Props): ReactElement {
         {p.parent && (
           <section className="block">
             <h3>Sessão principal</h3>
-            <PersonLink session={p.parent} onSelect={p.onSelect} />
+            <PersonLink session={p.parent} duck={p.duck} onSelect={p.onSelect} />
           </section>
         )}
 
@@ -224,7 +226,7 @@ export function DetailPanel(p: Props): ReactElement {
             <h3>Subagentes</h3>
             <div className="people">
               {p.subagents.map((c) => (
-                <PersonLink key={c.key} session={c} onSelect={p.onSelect} />
+                <PersonLink key={c.key} session={c} duck={p.duck} onSelect={p.onSelect} />
               ))}
             </div>
           </section>

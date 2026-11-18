@@ -14,6 +14,8 @@ interface Props {
   projects: ProjectCount[];
   agentCounts: { claude: number; codex: number };
   selectedKey: string | null;
+  /** Modo pato: os retratos acompanham a cena. */
+  duck: boolean;
   now: number;
   onAgent(agent: AgentFilter): void;
   onProject(project: string): void;
@@ -24,12 +26,14 @@ interface Props {
 function Row({
   row,
   selected,
+  duck,
   now,
   onSelect,
   onActivate,
 }: {
   row: ListRow;
   selected: boolean;
+  duck: boolean;
   now: number;
   onSelect(key: string): void;
   onActivate(key: string): void;
@@ -59,7 +63,7 @@ function Row({
         onDoubleClick={() => onActivate(s.key)}
         title={`${s.label} — ${AGENT_LABEL[s.agent]} · ${s.project}${s.title ? `\n${s.title}` : ''}\n${describeActivity(s)}${s.machine ? `\nRoda em outra máquina: ${s.machine}` : `\nDuplo clique: ${s.remote ? 'abrir no site do agente' : 'trazer a janela para a frente'}`}`}
       >
-        <Avatar session={s} size={row.depth === 1 ? 24 : 32} />
+        <Avatar session={s} size={row.depth === 1 ? 24 : 32} duck={duck} />
         <span className="row-main">
           <span className="row-title">
             <span className="row-name">{s.label}</span>
@@ -150,6 +154,7 @@ export function SessionList(p: Props): ReactElement {
               key={row.session.key}
               row={row}
               selected={row.session.key === p.selectedKey}
+              duck={p.duck}
               now={p.now}
               onSelect={p.onSelect}
               onActivate={p.onActivate}

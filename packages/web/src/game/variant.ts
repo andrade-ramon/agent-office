@@ -54,6 +54,19 @@ export const ACCENTS = [
 
 export const SKINS = ['#f6dcc0', '#eec39a', '#d9a070', '#b97a50'] as const;
 
+/** Modo pato: cor das penas (o moletom continua na cor do agente). */
+export const DUCK_FEATHERS = [
+  '#ffd84a',
+  '#ff9ecb',
+  '#7fe0c0',
+  '#b79cff',
+  '#7fc8ff',
+  '#f4f1e8',
+  '#b5e86a',
+  '#ff8f80',
+  '#5fd6e8',
+] as const;
+
 export interface Variant {
   agent: AgentKind;
   /** Subagente: sprite menor. */
@@ -61,8 +74,12 @@ export interface Variant {
   body: number;
   accent: number;
   skin: number;
-  /** Estilo da crista (Claude) ou da antena (Codex): 0–2. */
+  /** Estilo da crista (Claude) ou da antena (Codex): 0–2. No modo pato: óculos escuros, fone ou gorro. */
   style: number;
+  /** Modo pato: o personagem é um pato desenvolvedor. */
+  duck: boolean;
+  /** Cor das penas (só no modo pato). */
+  feather: number;
   /** Chave de cache do sprite sheet. */
   id: string;
 }
@@ -71,7 +88,7 @@ export interface Variant {
  * Aparência determinística a partir da chave da sessão. Subagentes herdam as
  * cores do pai (corpo e destaque) para ficarem visualmente ligados a ele.
  */
-export function variantFor(key: string, agent: AgentKind, parentKey?: string): Variant {
+export function variantFor(key: string, agent: AgentKind, parentKey?: string, duck = false): Variant {
   const own = hash32(key);
   const family = parentKey ? hash32(parentKey) : own;
   const bodies = agent === 'claude' ? CLAUDE_BODIES : CODEX_BODIES;
@@ -80,6 +97,8 @@ export function variantFor(key: string, agent: AgentKind, parentKey?: string): V
   const skin = (own >>> 16) % SKINS.length;
   const style = (own >>> 20) % 3;
   const small = Boolean(parentKey);
+  // Patinhos (subagentes) têm as penas da mesma cor do pato que os delegou.
+  const feather = (family >>> 4) % DUCK_FEATHERS.length;
   return {
     agent,
     small,
@@ -87,7 +106,9 @@ export function variantFor(key: string, agent: AgentKind, parentKey?: string): V
     accent,
     skin,
     style,
-    id: `${agent}-${small ? 's' : 'l'}-${body}-${accent}-${skin}-${style}`,
+    duck,
+    feather,
+    id: `${agent}-${small ? 's' : 'l'}-${body}-${accent}-${skin}-${style}${duck ? `-pato${feather}` : ''}`,
   };
 }
 
@@ -101,6 +122,10 @@ export function accentColor(v: Variant): string {
 
 export function skinColor(v: Variant): string {
   return SKINS[v.skin]!;
+}
+
+export function featherColor(v: Variant): string {
+  return DUCK_FEATHERS[v.feather]!;
 }
 
 /** "#rrggbb" → 0xrrggbb. */

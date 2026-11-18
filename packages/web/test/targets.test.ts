@@ -162,6 +162,25 @@ describe('aparência e ambiente', () => {
     expect(variantFor('claude:pai', 'claude')).toEqual(parent);
   });
 
+  it('modo pato: mesmo personagem, outra aparência; patinhos puxam as penas do pai', () => {
+    const person = variantFor('claude:pai', 'claude');
+    const duck = variantFor('claude:pai', 'claude', undefined, true);
+    expect(person.duck).toBe(false);
+    expect(duck.duck).toBe(true);
+    // O moletom, o destaque e o acessório continuam os do agente; só o sprite muda.
+    expect(duck).toMatchObject({ agent: 'claude', body: person.body, accent: person.accent, style: person.style, small: false });
+    expect(duck.id).not.toBe(person.id);
+    expect(duck.id.startsWith(person.id)).toBe(true);
+    expect(variantFor('claude:pai', 'claude', undefined, true)).toEqual(duck);
+
+    const duckling = variantFor('claude:filho', 'claude', 'claude:pai', true);
+    expect(duckling).toMatchObject({ small: true, duck: true, feather: duck.feather, body: duck.body });
+
+    // As penas variam de um pato para outro.
+    const feathers = new Set(Array.from({ length: 40 }, (_, i) => variantFor(`codex:${i}`, 'codex', undefined, true).feather));
+    expect(feathers.size).toBeGreaterThanOrEqual(5);
+  });
+
   it('escurece à noite e clareia de dia', () => {
     expect(ambientAt(12).night).toBe(0);
     expect(ambientAt(23).night).toBe(1);

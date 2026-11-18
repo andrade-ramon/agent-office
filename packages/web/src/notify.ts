@@ -36,7 +36,7 @@ const TITLES: Record<AttentionKind, (label: string) => string> = {
   done: (label) => `${label} concluiu`,
 };
 
-export function showNotification(session: SessionState, kind: AttentionKind, onClick: () => void): void {
+export function showNotification(session: SessionState, kind: AttentionKind, onClick: () => void, duck = false): void {
   if (!notificationsGranted()) return;
   try {
     const parts = [AGENT_LABEL[session.agent], session.project].filter(Boolean);
@@ -44,7 +44,7 @@ export function showNotification(session: SessionState, kind: AttentionKind, onC
     const n = new Notification(TITLES[kind](session.label), {
       body: parts.join(' · '),
       tag: `agent-office:${session.key}`,
-      icon: portraitFor(variantFor(session.key, session.agent, session.parentKey)),
+      icon: portraitFor(variantFor(session.key, session.agent, session.parentKey, duck)),
     });
     n.onclick = () => {
       window.focus();

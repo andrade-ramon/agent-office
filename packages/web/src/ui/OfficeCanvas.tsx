@@ -13,6 +13,8 @@ interface Props {
   project: string;
   labels: boolean;
   areas: boolean;
+  /** Modo pato. */
+  duck: boolean;
   timeMode: TimeMode;
   /** Largura (px) coberta pelo painel de detalhes, à direita. */
   insetRight: number;
@@ -31,7 +33,7 @@ declare global {
 
 /** Monta a cena Pixi e a mantém em sincronia com o estado do app. */
 export function OfficeCanvas(props: Props): ReactElement {
-  const { store, selectedKey, agent, project, labels, areas, timeMode, insetRight } = props;
+  const { store, selectedKey, agent, project, labels, areas, duck, timeMode, insetRight } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<OfficeScene | null>(null);
   const callbacks = useRef(props);
@@ -58,6 +60,8 @@ export function OfficeCanvas(props: Props): ReactElement {
         }
         scene = created;
         sceneRef.current = created;
+        // Antes de criar os personagens, para já nascerem com a aparência certa.
+        created.setDuckMode(callbacks.current.duck);
         created.reset(store.getState().sessions.values());
         created.setUsage(store.getState().usage);
         off = store.on({
@@ -119,6 +123,10 @@ export function OfficeCanvas(props: Props): ReactElement {
   useEffect(() => {
     sceneRef.current?.setShowAreas(areas);
   }, [areas, ready]);
+
+  useEffect(() => {
+    sceneRef.current?.setDuckMode(duck);
+  }, [duck, ready]);
 
   useEffect(() => {
     sceneRef.current?.setTimeMode(timeMode);

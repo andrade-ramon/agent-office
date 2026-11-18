@@ -101,6 +101,7 @@ export class OfficeScene {
   private selectedKey: string | null = null;
   private hoverKey: string | null = null;
   private showLabels = true;
+  private duck = false;
 
   // câmera
   private cam = { x: WORLD_W / 2, y: WORLD_H / 2, zoom: 1 };
@@ -221,6 +222,7 @@ export class OfficeScene {
       character: (key) => this.chars.get(key),
       confetti: (x, y) => this.confetti(x, y),
       resolution: () => this.app.renderer.resolution,
+      duck: () => this.duck,
     };
 
     const canvas = app.canvas;
@@ -512,6 +514,13 @@ export class OfficeScene {
 
   setShowLabels(on: boolean): void {
     this.showLabels = on;
+  }
+
+  /** Modo pato: todos os personagens viram patos desenvolvedores (e voltam). */
+  setDuckMode(on: boolean): void {
+    if (on === this.duck) return;
+    this.duck = on;
+    for (const c of this.chars.values()) c.setDuck(on);
   }
 
   setShowAreas(on: boolean): void {
@@ -1356,6 +1365,8 @@ export class OfficeScene {
       fit: () => this.fit(),
       focus: (key: string) => this.focusOn(key),
       focusBoard: () => this.focusBoard(),
+      setDuckMode: (on: boolean) => this.setDuckMode(on),
+      duckMode: () => this.duck,
       board: () => ({ rect: OFFICE.dashboard, ...this.board.debug() }),
       setZoom: (z: number) => this.setZoom(z),
       setTimeMode: (m: TimeMode) => this.setTimeMode(m),

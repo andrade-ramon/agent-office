@@ -33,6 +33,8 @@ export interface CharacterWorld {
   character(key: string): Character | undefined;
   confetti(x: number, y: number): void;
   resolution(): number;
+  /** Modo pato ligado: quem nasce agora já nasce pato. */
+  duck(): boolean;
 }
 
 export interface FrameView {
@@ -67,7 +69,7 @@ const ACTIVITY_BALLOON: Partial<Record<Activity, BalloonKind>> = {
 export class Character {
   readonly key: string;
   session: SessionState;
-  readonly variant: Variant;
+  variant: Variant;
   readonly pipColor: number;
 
   x = 0;
@@ -95,7 +97,7 @@ export class Character {
   dead = false;
 
   private readonly world: CharacterWorld;
-  private readonly sheet: CharacterSheet;
+  private sheet: CharacterSheet;
   private readonly body: Sprite;
   private readonly shadow: Sprite;
   private readonly balloon: Sprite;
@@ -109,7 +111,7 @@ export class Character {
   private tagSpace = 0;
   /** Retângulo da etiqueta na tela neste quadro (null = oculta). */
   tagBox: { x: number; y: number; w: number; h: number } | null = null;
-  private readonly height: number;
+  private height: number;
 
   private pendingSince = 0;
   private errorUntil = 0;
@@ -125,7 +127,7 @@ export class Character {
     this.world = world;
     this.key = session.key;
     this.session = session;
-    this.variant = variantFor(session.key, session.agent, session.parentKey);
+    this.variant = variantFor(session.key, session.agent, session.parentKey, world.duck());
     this.sheet = acquireSheet(this.variant);
     this.height = spriteHeight(this.variant);
     this.pipColor = hexToInt(accentColor(this.variant));
@@ -171,6 +173,17 @@ export class Character {
     layers.tags.addChild(this.tag);
 
     this.place(spawn, now);
+  }
+
+  /** Troca a aparência (modo pato) sem tirar o personagem do lugar. */
+  setDuck(on: boolean): void {
+    const next = variantFor(this.key, this.session.agent, this.session.parentKey, on);
+    if (next.id === this.variant.id) return;
+    releaseSheet(this.sheet);
+    this.variant = next;
+    this.sheet = acquireSheet(next);
+    this.height = spriteHeight(next);
+    this.lastPoseKey = '';
   }
 
   // ───────────────────────── estado da sessão ─────────────────────────
@@ -564,6 +577,8 @@ export class Character {
       const phase = Math.floor(this.walkClock / 105) % 4;
       legs = phase === 1 ? 'walkA' : phase === 3 ? 'walkB' : 'stand';
       arms = phase === 1 ? 'swingA' : phase === 3 ? 'swingB' : 'down';
+      // pato anda gingando
+      if (this.variant.duck) dx = phase === 1 ? -1 : phase === 3 ? 1 : 0;
       dy = phase % 2 === 1 ? -1 : 0;
       if (status === 'working' && this.session.toolCategory) balloon = CATEGORY_BALLOON[this.session.toolCategory];
       else if (isWorkActivity(activity)) balloon = ACTIVITY_BALLOON[activity] ?? null;

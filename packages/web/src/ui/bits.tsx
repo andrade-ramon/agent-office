@@ -8,11 +8,14 @@ import { STATUS_LABEL } from '../i18n';
 export const Avatar = memo(function Avatar({
   session,
   size = 32,
+  duck = false,
 }: {
   session: Pick<SessionState, 'key' | 'agent' | 'parentKey'>;
   size?: number;
+  /** Modo pato: o retrato acompanha a cena. */
+  duck?: boolean;
 }): ReactElement {
-  const src = portraitFor(variantFor(session.key, session.agent, session.parentKey));
+  const src = portraitFor(variantFor(session.key, session.agent, session.parentKey, duck));
   return <img className={`avatar avatar-${session.agent}`} src={src} width={size} height={size} alt="" draggable={false} />;
 });
 

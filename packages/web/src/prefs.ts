@@ -12,6 +12,8 @@ export interface Prefs {
   labels: boolean;
   /** Legenda das áreas sobre a cena. */
   areas: boolean;
+  /** Modo pato: os personagens são patos desenvolvedores. */
+  duck: boolean;
   notify: boolean;
   notifyDone: boolean;
   timeMode: TimeMode;
@@ -30,6 +32,7 @@ export const DEFAULT_PREFS: Prefs = {
   compact: false,
   labels: true,
   areas: false,
+  duck: false,
   notify: false,
   notifyDone: false,
   timeMode: 'auto',
@@ -60,6 +63,7 @@ export function loadPrefs(): Prefs {
       compact: bool(data.compact, DEFAULT_PREFS.compact),
       labels: bool(data.labels, DEFAULT_PREFS.labels),
       areas: bool(data.areas, DEFAULT_PREFS.areas),
+      duck: bool(data.duck, DEFAULT_PREFS.duck),
       notify: bool(data.notify, DEFAULT_PREFS.notify),
       notifyDone: bool(data.notifyDone, DEFAULT_PREFS.notifyDone),
       timeMode,

@@ -1,4 +1,4 @@
-import { accentColor, bodyColor, skinColor, type Variant } from '../variant';
+import { accentColor, bodyColor, featherColor, skinColor, type Variant } from '../variant';
 import { OUTLINE, Painter, makeCanvas, outlineRegion, shade } from './painter';
 
 /**
@@ -8,6 +8,11 @@ import { OUTLINE, Painter, makeCanvas, outlineRegion, shade } from './painter';
  *    forma de faísca no topo.
  *  - Codex: robô de cabeça quadrada em tons frios, visor escuro com olhos
  *    luminosos e antena.
+ *
+ *  - Modo pato: qualquer um dos dois vira um pato desenvolvedor — penas
+ *    coloridas, bico e pés laranja, moletom na cor do agente (com o emblema
+ *    dele no peito) e óculos escuros, fone de ouvido ou gorro. Subagentes são
+ *    patinhos.
  *
  * Cada pose é desenhada sob demanda a partir de parâmetros (direção, pernas,
  * braços, olhos, objeto na mão).
@@ -85,9 +90,30 @@ interface Colors {
   shoes: string;
   eye: string;
   detail: string;
+  /** Modo pato. */
+  duck?: { feather: string; hi: string; lo: string; beak: string; beakLo: string };
 }
 
 function colorsFor(v: Variant): Colors {
+  const base = agentColors(v);
+  if (!v.duck) return base;
+  // O corpo continua sendo o do agente (agora um moletom); o resto é pato.
+  const feather = featherColor(v);
+  return {
+    ...base,
+    sleeve: shade(base.body, -0.1),
+    hand: feather,
+    skin: feather,
+    skinLo: shade(feather, -0.16),
+    legs: '#e2811f',
+    legsFar: '#bd6717',
+    shoes: '#ffab40',
+    eye: '#2a2233',
+    duck: { feather, hi: shade(feather, 0.32), lo: shade(feather, -0.18), beak: '#ffab40', beakLo: '#e2811f' },
+  };
+}
+
+function agentColors(v: Variant): Colors {
   const body = bodyColor(v);
   const accent = accentColor(v);
   if (v.agent === 'claude') {
@@ -165,29 +191,35 @@ function drawFrontBack(
   // ── pernas ──
   const legL = tx;
   const legR = tx + tw - b.legW;
-  const drawLeg = (x: number, h: number): void => {
+  const drawLeg = (x: number, h: number, outer: -1 | 1): void => {
     if (h <= 0) return;
     p.rect(x, base - legH, b.legW, h, c.legs);
     p.rect(x, base - legH + h - 1, b.legW, 1, c.shoes);
+    // pé de pato: abre para fora
+    if (c.duck) p.px(outer < 0 ? x - 1 : x + b.legW, base - legH + h - 1, c.shoes);
   };
   if (pose.legs === 'sit') {
     if (!back) {
-      drawLeg(legL, legH);
-      drawLeg(legR, legH);
+      drawLeg(legL, legH, -1);
+      drawLeg(legR, legH, 1);
     } else {
       p.rect(legL, base - legH, b.legW, legH, c.legs);
       p.rect(legR, base - legH, b.legW, legH, c.legs);
     }
   } else {
-    drawLeg(legL, pose.legs === 'walkA' ? legH - 1 : legH);
-    drawLeg(legR, pose.legs === 'walkB' ? legH - 1 : legH);
+    drawLeg(legL, pose.legs === 'walkA' ? legH - 1 : legH, -1);
+    drawLeg(legR, pose.legs === 'walkB' ? legH - 1 : legH, 1);
   }
 
   // ── tronco ──
   p.rect(tx, torsoTop, tw, th, c.body);
   p.rect(tx + tw - 1, torsoTop, 1, th, c.bodyLo);
   p.rect(tx, torsoTop + th - 1, tw, 1, c.bodyLo);
-  if (claude) {
+  if (c.duck && back) {
+    // de costas: o capuz do moletom caído e o rabinho aparecendo embaixo
+    if (b.torsoW >= 6) p.rect(cx - 2, torsoTop, 4, 2, c.bodyLo).rect(cx - 1, torsoTop + 1, 2, 1, c.bodyHi);
+    p.rect(cx - 1, torsoTop + th - 1, 2, 2, c.duck.feather).px(cx - 1, torsoTop + th - 1, c.duck.hi);
+  } else if (claude) {
     if (b.torsoW >= 6) {
       // faísca no peito / nas costas
       p.rect(cx - 1, torsoTop + 1, 2, 2, c.detail);
@@ -204,6 +236,8 @@ function drawFrontBack(
   } else {
     p.rect(cx - 1, torsoTop + 1, 2, 1, back ? c.bodyLo : c.accent);
   }
+  // cordões do capuz
+  if (c.duck && !back && b.torsoW >= 6) p.px(cx - 2, torsoTop, '#f4f1e8').px(cx + 1, torsoTop, '#f4f1e8');
 
   // ── cabeça ──
   drawHead(p, v, b, c, pose, cx, headTop, back ? 'up' : 'down');
@@ -325,6 +359,11 @@ function drawHead(
   const x0 = cx - hw / 2;
   const big = hw >= 10;
 
+  if (c.duck) {
+    drawDuckHead(p, v, c, c.duck, pose, cx, x0, headTop, hw, hh, dir);
+    return;
+  }
+
   if (v.agent === 'claude') {
     // capuz arredondado
     p.rect(x0 + 2, headTop, hw - 4, 1, c.bodyHi);
@@ -416,6 +455,94 @@ function drawHead(
   }
 }
 
+/** Cabeça de pato: penas, bico e o acessório de quem programa (óculos escuros, fone ou gorro). */
+function drawDuckHead(
+  p: Painter,
+  v: Variant,
+  c: Colors,
+  d: NonNullable<Colors['duck']>,
+  pose: Pose,
+  cx: number,
+  x0: number,
+  headTop: number,
+  hw: number,
+  hh: number,
+  dir: SpriteDir,
+): void {
+  const big = hw >= 10;
+  const FRAME = '#2a2233';
+  const GLINT = '#8fd3ff';
+  const BAND = '#2a2f3a';
+  const MOUTH = '#b0413e';
+  const blush = shade(d.feather, -0.14);
+  const ey = headTop + 3;
+  const eL = x0 + 2;
+  const eR = x0 + hw - 3;
+  const glasses = big && v.style === 0;
+  const phones = big && v.style === 1;
+  const beanie = big && v.style === 2;
+
+  // penas
+  p.rect(x0 + 2, headTop, hw - 4, 1, d.hi);
+  p.rect(x0 + 1, headTop + 1, hw - 2, 1, d.feather);
+  p.rect(x0, headTop + 2, hw, hh - 3, d.feather);
+  p.rect(x0 + 1, headTop + hh - 1, hw - 2, 1, d.lo);
+  p.rect(x0 + hw - 1, headTop + 2, 1, hh - 3, d.lo);
+  p.rect(x0 + 2, headTop + 1, 2, 1, d.hi);
+
+  if (dir === 'down') {
+    if (glasses) {
+      // óculos escuros: nessa escala, armação fina vira sobrancelha franzida
+      p.rect(x0 + 1, ey, hw - 2, 1, FRAME);
+      p.rect(x0 + 1, ey + 1, 3, 1, FRAME).rect(x0 + hw - 4, ey + 1, 3, 1, FRAME);
+      p.px(eL, ey, GLINT).px(eR, ey, GLINT);
+    } else {
+      drawEyes(p, pose.eyes, eL, eR, ey, big, c.eye, false);
+    }
+    if (big) p.px(x0 + 1, ey + 2, blush).px(x0 + hw - 2, ey + 2, blush);
+    // bico largo e chato; aberto quando o pato está feliz
+    const by = headTop + hh - 3;
+    if (big) p.rect(cx - 3, by, 6, 1, d.beak).rect(cx - 2, by + 1, 4, 1, d.beakLo);
+    else p.rect(cx - 2, by, 4, 1, d.beak).rect(cx - 1, by + 1, 2, 1, d.beakLo);
+    if (pose.eyes === 'happy') p.rect(cx - 1, by + 1, 2, 1, MOUTH);
+  } else if (dir === 'side') {
+    if (glasses) {
+      p.rect(x0 + 1, ey, 3, 2, FRAME).px(x0 + 1, ey, GLINT);
+      p.rect(x0 + 4, ey, hw - 5, 1, FRAME);
+    } else if (pose.eyes === 'closed' || pose.eyes === 'happy') p.rect(x0 + 1, ey + 1, 2, 1, c.eye);
+    else if (pose.eyes === 'x') p.rect(x0 + 1, ey, 2, 2, c.eye);
+    else p.rect(x0 + 2, ey, 1, big ? 2 : 1, c.eye);
+    if (big) p.px(x0 + 3, ey + 2, blush);
+    // bico para a frente
+    const by = headTop + hh - 4;
+    if (big) p.rect(x0 - 3, by, 4, 1, d.beak).rect(x0 - 2, by + 1, 3, 1, d.beakLo);
+    else p.rect(x0 - 2, by, 3, 1, d.beak).rect(x0 - 1, by + 1, 2, 1, d.beakLo);
+    if (pose.eyes === 'happy') p.px(x0 - 1, by + 1, MOUTH);
+  } else {
+    p.px(cx - 1, headTop + 3, d.lo).px(cx, headTop + 4, d.lo);
+    if (glasses) p.px(x0, ey, FRAME).px(x0 + hw - 1, ey, FRAME);
+  }
+
+  if (phones) {
+    p.rect(x0 + 1, headTop - 1, hw - 2, 1, BAND).px(x0, headTop, BAND).px(x0 + hw - 1, headTop, BAND);
+    if (dir === 'side') {
+      p.rect(cx, headTop + 2, 3, 4, c.accent).px(cx, headTop + 2, c.accentHi).rect(cx + 1, headTop, 1, 2, BAND);
+    } else {
+      p.rect(x0 - 1, headTop + 2, 2, 4, c.accent).px(x0 - 1, headTop + 2, c.accentHi);
+      p.rect(x0 + hw - 1, headTop + 2, 2, 4, c.accent).px(x0 + hw - 1, headTop + 2, c.accentHi);
+    }
+  } else if (beanie) {
+    p.rect(x0 + 1, headTop - 1, hw - 2, 1, c.accentHi);
+    p.rect(x0, headTop, hw, 2, c.accent);
+    p.rect(x0, headTop + 2, hw, 1, shade(c.accent, -0.3));
+    p.rect(cx - 1, headTop - 2, 2, 1, '#f4f1e8');
+  } else {
+    // topete
+    p.px(cx, headTop - 1, d.hi);
+    if (big) p.px(cx + 1, headTop - 2, d.hi).px(cx - 1, headTop - 1, d.feather);
+  }
+}
+
 function drawEyes(
   p: Painter,
   eyes: EyePose,
@@ -493,6 +620,11 @@ function drawSide(
   p.rect(sx, torsoTop, tw, th, c.body);
   p.rect(sx + tw - 1, torsoTop, 1, th, c.bodyLo);
   p.rect(sx, torsoTop + th - 1, tw, 1, c.bodyLo);
+  if (c.duck) {
+    // rabinho arrebitado atrás e o capuz caído na nuca
+    p.rect(sx + tw, torsoTop + th - 2, 2, 1, c.duck.feather).px(sx + tw + 1, torsoTop + th - 3, c.duck.hi);
+    if (b.torsoW >= 6) p.rect(sx + tw - 1, torsoTop, 2, 2, c.bodyLo);
+  }
 
   // ── cabeça ──
   drawHead(p, v, b, c, pose, cx, headTop, 'side');
