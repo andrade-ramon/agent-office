@@ -157,19 +157,33 @@ Na ala de baixo do escritório há um telão com o **acumulado de todas as sess�
 | No telão | O que é |
 |---|---|
 | **Tokens** | soma de todas as sessões, com a composição: entrada, saída, cache lido e cache gravado (o cache lido costuma ser quase tudo) |
+| **Custo estimado** | quanto esses tokens custariam em dólares, a preço de tabela das APIs da Anthropic e da OpenAI |
 | **Prompts** | quantas mensagens você enviou aos agentes |
 | **Tempo ativo** | tempo em que as sessões estiveram trabalhando, somado entre elas (duas sessões em paralelo por uma hora = duas horas) |
 | **Sessões** | sessões principais, com os subagentes contados à parte |
 | **Ferramentas** | chamadas de ferramenta |
 
-Cada indicador mostra também **hoje** e os **últimos 7 dias**. Embaixo ficam o gráfico dos últimos 14 dias (Claude e Codex) e um quadro que se reveza entre modelos e projetos que mais consumiram, ferramentas por tipo, agentes, subagentes e o dia recorde.
+Cada indicador mostra também **hoje** e os **últimos 7 dias**. Embaixo ficam o gráfico dos últimos 14 dias (Claude e Codex) e um quadro que se reveza entre modelos e projetos que mais consumiram, custo por modelo e por agente, ferramentas por tipo, subagentes e o dia recorde.
 
 Como é calculado:
 
 - Os números vêm dos transcripts locais (`~/.claude/projects`, `~/.codex/sessions` e `~/.codex/archived_sessions`), não dos hooks. Na primeira vez o servidor lê **todo o histórico que ainda existe no disco** (alguns segundos; o telão mostra o progresso). Depois lê só o que cada arquivo cresceu, e o que já foi somado continua valendo mesmo que o agente apague transcripts antigos.
 - Nada é contado duas vezes: retomar ou bifurcar uma sessão copia o histórico para um arquivo novo, e cada linha e cada resposta do modelo entram na soma uma vez só.
 - **Tempo ativo** vai do seu prompt até o fim do turno. Um intervalo sem eventos conta no máximo 5 minutos (o mesmo prazo em que o personagem vira "ocioso"), para não somar permissões esquecidas nem o computador dormindo.
+- **Custo estimado** aplica o preço de tabela de cada modelo a cada tipo de token: entrada, saída, cache lido e cache gravado (por 5 minutos ou por 1 hora). O modo rápido e os prompts longos do Claude Haiku 5.5 entram com o preço próprio. É uma estimativa: quem usa os agentes por assinatura não paga por token, e descontos ou outros provedores (Bedrock, Vertex) mudam a conta.
 - Ficam de fora as sessões na nuvem e as de outras máquinas: delas não há transcript aqui.
+
+A tabela de preços fica no código ([`pricing.ts`](packages/server/src/pricing.ts), conferida em 18/11/2026), porque o agent-office não consulta nada fora da sua máquina. Um modelo que ela não conhece aparece no quadro "modelos sem preço" e o total ganha um `≥`. Para incluir ou corrigir um preço, use a seção `prices` do `~/.agent-office/config.json`, em dólares por milhão de tokens; vale na hora, sem reiniciar:
+
+```json
+{
+  "prices": {
+    "nome-do-modelo": { "input": 2, "output": 10, "cacheRead": 0.1, "cacheWrite": 2.5, "cacheWrite1h": 4 }
+  }
+}
+```
+
+`cacheRead`, `cacheWrite` e `cacheWrite1h` são opcionais (padrão: 0,1×, 1,25× e 2× o preço de entrada).
 
 Os mesmos números estão em `GET /api/usage`.
 
