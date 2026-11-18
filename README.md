@@ -218,10 +218,24 @@ O demo usa outra porta (4748), não lê seus transcripts e não grava histórico
 - **Arrastar** move a câmera, **roda do mouse** dá zoom, **Focar** segue o personagem selecionado.
 - **Painel** (ou `P`, ou um clique no telão) aproxima a câmera do [painel de dados](#painel-de-dados).
 - Filtros por agente e por projeto, lista lateral de sessões, modo compacto e tela cheia.
+- **Mini mapa** (botão no topo ou tecla `M`): o escritório inteiro em uma janela flutuante, que fica por cima dos outros apps — veja [Mini mapa flutuante](#mini-mapa-flutuante).
 - **Modo pato** (botão do pato ou tecla `Q`): os agentes viram patos desenvolvedores — penas coloridas, moletom na cor do agente, óculos escuros, fone de ouvido ou gorro — e os subagentes viram patinhos da mesma cor. Vale também para os retratos da lista e fica salvo.
 - Quem está **aguardando você** (pergunta ou pedido de permissão) ganha balão, anel pulsante, destaque na lista e contador no título da aba. Notificações de desktop são opcionais.
 
 ![O escritório no modo pato: patos de moletom, óculos escuros, fone e gorro trabalhando nas mesas e na bancada da nuvem](docs/patos.png)
+
+### Mini mapa flutuante
+
+Para acompanhar os agentes enquanto trabalha em outro app, abra o mini mapa: botão no topo da interface (ou no modo compacto) ou tecla `M`. Ele é uma janela pequena, **sempre por cima das outras**, que o navegador coloca no canto inferior direito da tela e você arrasta para onde quiser.
+
+- Mostra o escritório inteiro, com a animação normal, mesmo com a janela principal minimizada ou escondida atrás de outro app.
+- Só aparecem os nomes de quem está **esperando por você**; nesse caso a barra de baixo fica amarela, e um clique nela leva à janela principal, já com a sessão selecionada. Clicar em um personagem faz o mesmo.
+- **Tamanho**: arraste a borda da janela ou use os botões `P`, `M` e `G` na barra. O último tamanho fica salvo.
+- **Ocultar**: o `×` da barra, o `×` da própria janela, `Esc` dentro dela ou `M` de novo.
+
+![O mini mapa flutuante: o escritório inteiro em uma janela pequena, com a barra amarela avisando que uma sessão espera por você](docs/mini-mapa.png)
+
+Usa a API de *Document Picture-in-Picture*, disponível no Chrome e no Edge (116 ou mais novo), inclusive no app instalado. O navegador só abre essa janela a partir de um clique ou tecla: não dá para ela surgir sozinha quando você sai da janela principal. Depois de aberta, fica até você ocultar.
 
 ### O que cada lugar significa
 
