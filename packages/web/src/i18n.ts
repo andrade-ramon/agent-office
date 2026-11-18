@@ -166,6 +166,26 @@ export function formatHours(ms: number): string {
   return `${(minutes / 60).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
 
+/** Como `formatHours`, mais curto para as linhas de apoio: "52 min", "1h03", "28,8 h". */
+export function formatHoursShort(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 60 || minutes >= 600) return formatHours(ms);
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** Valor em dólares sem o símbolo: "34,20", "8.412", "123,5 mil", "1,23 mi". */
+export function formatUsdShort(usd: number): string {
+  const v = Math.max(0, usd);
+  if (v < 100) return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (v < 99_999.5) return formatNumber(Math.round(v));
+  return formatTokens(v);
+}
+
+/** 8412.3 → "US$ 8.412". */
+export function formatUsd(usd: number): string {
+  return `US$ ${formatUsdShort(usd)}`;
+}
+
 /** 1732000000000 → "18/11". */
 export function formatDay(ts: number): string {
   const d = new Date(ts);

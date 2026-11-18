@@ -1,5 +1,14 @@
 import type { ToolCategory, UsageResponse, UsageTotals } from '@agent-office/server/schema';
-import { CATEGORY_LABEL, formatDate, formatHours, formatNumber, formatTokens } from '../i18n';
+import {
+  CATEGORY_LABEL,
+  formatDate,
+  formatHours,
+  formatHoursShort,
+  formatNumber,
+  formatTokens,
+  formatUsd,
+  formatUsdShort,
+} from '../i18n';
 
 /**
  * O que o telão do painel de dados mostra, já em texto. Sem Pixi: só
@@ -41,7 +50,7 @@ export interface BoardModel {
   pages: BoardPage[];
 }
 
-export const KPI_LABELS = ['TOKENS', 'PROMPTS', 'TEMPO ATIVO', 'SESSÕES', 'FERRAMENTAS'] as const;
+export const KPI_LABELS = ['TOKENS', 'CUSTO ESTIMADO', 'PROMPTS', 'TEMPO ATIVO', 'SESSÕES', 'FERRAMENTAS'] as const;
 export const MIX_LABELS = ['entrada', 'saída', 'cache lido', 'cache gravado'] as const;
 
 /** Contagens grandes: inteiras até 9.999, depois "59,3 mil". */
@@ -86,17 +95,25 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
   const pick = (get: (t: UsageTotals) => number, format: (n: number) => string): string =>
     recent(format(get(usage.today)), format(get(usage.week)));
 
+  // Com algum modelo fora da tabela de preços, o total é um piso.
+  const partial = usage.cost.unpricedTokens > 0;
   const kpis: BoardKpi[] = [
     { label: KPI_LABELS[0], value: all.tokens.total, format: formatTokens, sub: pick((t) => t.tokens.total, formatTokens) },
-    { label: KPI_LABELS[1], value: all.prompts, format: formatCount, sub: pick((t) => t.prompts, formatCount) },
-    { label: KPI_LABELS[2], value: all.activeMs, format: formatHours, sub: pick((t) => t.activeMs, formatHours) },
     {
-      label: KPI_LABELS[3],
+      label: KPI_LABELS[1],
+      value: all.costUsd,
+      format: (v) => `${partial ? '≥ ' : ''}${formatUsd(v)}`,
+      sub: pick((t) => t.costUsd, formatUsdShort),
+    },
+    { label: KPI_LABELS[2], value: all.prompts, format: formatCount, sub: pick((t) => t.prompts, formatCount) },
+    { label: KPI_LABELS[3], value: all.activeMs, format: formatHours, sub: pick((t) => t.activeMs, formatHoursShort) },
+    {
+      label: KPI_LABELS[4],
       value: all.sessions,
       format: formatCount,
       sub: `+ ${formatCount(all.subagents)} ${all.subagents === 1 ? 'subagente' : 'subagentes'}`,
     },
-    { label: KPI_LABELS[4], value: all.tools, format: formatCount, sub: pick((t) => t.tools, formatCount) },
+    { label: KPI_LABELS[5], value: all.tools, format: formatCount, sub: pick((t) => t.tools, formatCount) },
   ];
 
   const t = all.tokens;
@@ -109,6 +126,10 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
   const pages: BoardPage[] = [];
   if (usage.models.length > 0) {
     pages.push({ title: 'MODELOS', rows: usage.models.slice(0, 2).map((m) => [shortModel(m.name), formatTokens(m.tokens)]) });
+  }
+  const byCost = usage.models.filter((m) => (m.costUsd ?? 0) > 0).sort((a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0));
+  if (byCost.length > 0) {
+    pages.push({ title: 'CUSTO POR MODELO', rows: byCost.slice(0, 2).map((m) => [shortModel(m.name), formatUsd(m.costUsd ?? 0)]) });
   }
   if (usage.projects.length > 0) {
     pages.push({ title: 'PROJETOS', rows: usage.projects.slice(0, 2).map((p) => [clip(p.name, 15), formatTokens(p.tokens)]) });
@@ -127,6 +148,18 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
         ['Codex', formatTokens(usage.byAgent.codex.tokens.total)],
       ],
     });
+  }
+  if (all.costUsd > 0) {
+    pages.push({
+      title: 'CUSTO POR AGENTE',
+      rows: [
+        ['Claude', formatUsd(usage.byAgent.claude.costUsd)],
+        ['Codex', formatUsd(usage.byAgent.codex.costUsd)],
+      ],
+    });
+  }
+  if (partial) {
+    pages.push({ title: 'MODELOS SEM PREÇO', rows: usage.cost.unpriced.slice(0, 2).map((m) => [shortModel(m.name), formatTokens(m.tokens)]) });
   }
   if (all.subagents > 0) {
     pages.push({

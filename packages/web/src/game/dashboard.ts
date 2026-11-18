@@ -27,15 +27,16 @@ const INK = {
   codex: 0x7fb2ff,
 } as const;
 
-const KPI_COLORS = [INK.amber, INK.blue, INK.green, INK.pink, INK.purple];
+const KPI_COLORS = [INK.amber, INK.green, INK.blue, INK.cyan, INK.pink, INK.purple];
 const MIX_COLORS = [INK.green, INK.amber, INK.blue, INK.purple];
 /** Colunas dos indicadores (x e largura útil, em pixels do mundo). */
 const COLS = [
-  { x: 8, w: 150 },
-  { x: 166, w: 88 },
-  { x: 262, w: 108 },
-  { x: 378, w: 80 },
-  { x: 466, w: 96 },
+  { x: 8, w: 104 },
+  { x: 118, w: 98 },
+  { x: 222, w: 66 },
+  { x: 294, w: 96 },
+  { x: 396, w: 70 },
+  { x: 472, w: 90 },
 ] as const;
 const MIX_STEP = 126;
 const CHART = { x: 262, y: 60, w: 196, h: 13, bar: 12, gap: 2 } as const;
@@ -63,8 +64,8 @@ export class DataBoard {
   private readonly pageName: Text[] = [];
   private readonly pageValue: Text[] = [];
   private model: BoardModel = boardModel(null);
-  private readonly shown: number[] = [0, 0, 0, 0, 0];
-  private readonly shownText: string[] = ['', '', '', '', ''];
+  private readonly shown: number[] = COLS.map(() => 0);
+  private readonly shownText: string[] = COLS.map(() => '');
   private clock = 0;
   private page = -1;
   private res = 1;
@@ -77,7 +78,7 @@ export class DataBoard {
 
     const lines = new Graphics();
     lines.rect(6, 11, this.w - 12, 1).rect(6, 50, this.w - 12, 1);
-    for (const col of COLS.slice(1)) lines.rect(col.x - 5, 14, 1, 34);
+    for (const col of COLS.slice(1)) lines.rect(col.x - 4, 14, 1, 34);
     lines.rect(CHART.x - 5, 53, 1, 21).rect(SIDE.x - 5, 53, 1, 21);
     lines.fill({ color: INK.line });
     this.view.addChild(lines, this.chart, this.liveDot);
@@ -90,7 +91,7 @@ export class DataBoard {
 
     COLS.forEach((col, i) => {
       this.text(this.model.kpis[i]!.label, col.x, 13.4, 6.4, KPI_COLORS[i]!, '700', 0.4);
-      this.kpiValue.push(this.text('—', col.x - 0.5, 19.6, 17, INK.bright, '700'));
+      this.kpiValue.push(this.text('—', col.x - 0.5, 20.2, 16, INK.bright, '700'));
       this.kpiSub.push(this.text('', col.x, 41, 6.3, INK.muted));
     });
 
