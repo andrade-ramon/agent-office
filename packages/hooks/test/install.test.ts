@@ -25,7 +25,7 @@ import {
 import { currentAlert, describeAlert, disableAlert, enableAlert } from '../src/alert.js';
 import { currentCloud, disableCloud, enableCloud } from '../src/cloud.js';
 import { addPeer, listPeers, removePeer } from '../src/peers.js';
-import { currentRate, parseRate, resetRate, setRate } from '../src/rate.js';
+import { currentRate, enableAutoRate, isAutoRate, parseRate, resetRate, setRate } from '../src/rate.js';
 import { getPaths, HOOK_MARKER, readConfig, writeConfig, type Paths } from '../src/paths.js';
 import { launchdPlist, systemdUnit, windowsTaskArgs, type ServiceSpec } from '../src/service.js';
 
@@ -497,6 +497,23 @@ describe('câmbio do custo em reais (config)', () => {
     expect(resetRate(paths)).toBe(false);
     expect(currentRate(paths)).toBeUndefined();
     expect(readConfig(paths)).toEqual({ port: 4800, voiceAlert: { enabled: true, text: 'Ramon' } });
+  });
+
+  it('automático e valor digitado se excluem', () => {
+    writeConfig(paths, { port: 4800, usdBrl: 5.43 });
+    expect(isAutoRate(paths)).toBe(false);
+
+    enableAutoRate(paths);
+    expect(isAutoRate(paths)).toBe(true);
+    expect(readConfig(paths)).toEqual({ port: 4800, usdBrlAuto: true });
+
+    // informar um valor desliga a busca no Banco Central
+    setRate(paths, '5,9');
+    expect(readConfig(paths)).toEqual({ port: 4800, usdBrl: 5.9 });
+
+    enableAutoRate(paths);
+    expect(resetRate(paths)).toBe(true);
+    expect(readConfig(paths)).toEqual({ port: 4800 });
   });
 
   it('recusa valores que não são um câmbio', () => {

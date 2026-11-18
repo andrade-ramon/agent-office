@@ -333,10 +333,13 @@ describe('painel de dados: livro-razão de uso', () => {
 
     // O câmbio do config.json também vale na hora.
     const config: { usdBrl?: number } = {};
-    const brl = new UsageLedger(db.handle, { now: () => now, usdBrl: () => config.usdBrl });
-    expect(brl.summary().cost).toMatchObject({ usdBrl: USD_BRL.rate, usdBrlAsOf: USD_BRL.asOf });
+    const brl = new UsageLedger(db.handle, {
+      now: () => now,
+      exchange: () => (config.usdBrl === undefined ? undefined : { rate: config.usdBrl, asOf: null, source: 'config' }),
+    });
+    expect(brl.summary().cost).toMatchObject({ usdBrl: USD_BRL.rate, usdBrlAsOf: USD_BRL.asOf, usdBrlSource: 'embedded' });
     config.usdBrl = 5.43;
-    expect(brl.summary().cost).toMatchObject({ usdBrl: 5.43, usdBrlAsOf: null });
+    expect(brl.summary().cost).toMatchObject({ usdBrl: 5.43, usdBrlAsOf: null, usdBrlSource: 'config' });
     await brl.stop();
   });
 

@@ -154,6 +154,11 @@ export function usdBrlReader(home: string = officeHome()): () => number | undefi
   return valueReader<number | undefined>(home, 'usdBrl', undefined, parseUsdBrl);
 }
 
+/** "usdBrlAuto": busca a cotação do dólar no Banco Central (opcional; é uma requisição para fora). */
+export function usdBrlAutoReader(home: string = officeHome()): () => boolean {
+  return valueReader(home, 'usdBrlAuto', false, (v) => v === true);
+}
+
 export const DEFAULT_CONFIG: OfficeConfig = {
   port: DEFAULT_PORT,
   idleAfterMin: 5,

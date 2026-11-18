@@ -315,8 +315,10 @@ export interface UsageResponse {
     unpriced: UsageRank[];
     /** Reais por dólar, para mostrar o custo em reais. */
     usdBrl: number;
-    /** Data da referência embutida; null quando o câmbio foi definido no config.json. */
+    /** Dia da cotação; null quando o câmbio foi digitado no config.json. */
     usdBrlAsOf: string | null;
+    /** Referência do código, valor do config.json ou PTAX consultada no Banco Central. */
+    usdBrlSource: 'embedded' | 'config' | 'bcb';
   };
   /** Dias com alguma atividade. */
   activeDays: number;
@@ -347,6 +349,8 @@ export interface HealthResponse {
   claudeCloud: RemoteSourceHealth;
   /** Outros computadores cujas sessões este escritório espelha. */
   peers: PeerHealth[];
+  /** Câmbio automático (PTAX do Banco Central): ligado? última cotação e erro. */
+  exchange: { enabled: boolean; rate: number | null; asOf: string | null; lastOkAt: number | null; error: string | null };
 }
 
 export interface PeerHealth {

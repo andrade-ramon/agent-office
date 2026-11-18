@@ -31,6 +31,7 @@ export interface Health {
   codexCloud?: CloudHealth;
   claudeCloud?: CloudHealth;
   peers?: { name: string; connected: boolean; sessions: number; lastOkAt: number | null; error: string | null }[];
+  exchange?: { enabled: boolean; rate: number | null; asOf: string | null; lastOkAt: number | null; error: string | null };
 }
 
 export function httpGet(port: number, path: string, timeoutMs = 1500): Promise<{ status: number; body: string } | null> {

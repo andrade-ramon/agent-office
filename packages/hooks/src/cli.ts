@@ -2,7 +2,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
 import { addPeer, checkSshPeer, describePeer, listPeers, removePeer } from './peers.js';
-import { currentRate, formatRate, resetRate, setRate } from './rate.js';
+import { currentRate, enableAutoRate, formatRate, isAutoRate, resetRate, setRate } from './rate.js';
 import { CLOUD_AGENTS, cloudLabel, currentCloud, describeCloud, disableCloud, enableCloud, type CloudAgent } from './cloud.js';
 import { currentAlert, describeAlert, disableAlert, enableAlert, isAlertSound, playOnce, speakOnce } from './alert.js';
 import { runDoctor, type Level } from './doctor.js';
@@ -89,9 +89,13 @@ Uso: agent-office <comando> [opções]
                  add <nome> <host|usuario@host> [--port <porta de lá>]
                  add <nome> --url http://127.0.0.1:<porta>   (túnel que você mantém)
                  remove <nome> | status
-  rate         câmbio do custo em reais no painel de dados (o agent-office não
-               consulta cotação: sem um valor seu, vale a referência embutida)
-                 <reais por dólar> | reset | status
+  rate         câmbio do custo em reais no painel de dados (sem nada definido,
+               vale uma referência embutida no código)
+                 <reais por dólar>    usa o valor que você informar
+                 auto                 busca a cotação PTAX no Banco Central a cada
+                                      6 horas (opcional: é uma consulta para fora,
+                                      sem nenhum dado seu)
+                 reset | status
   doctor       diagnóstico completo
   fix-settings corrige problemas conhecidos do ~/.claude/settings.json que fazem
                o Claude Code ignorar o arquivo (ex.: statusLine sem "type")
@@ -555,24 +559,58 @@ async function cmdRate(paths: Paths, args: string[]): Promise<number> {
     line('ok', 'Câmbio', had ? 'voltou para a referência embutida' : 'já estava na referência embutida');
     return 0;
   }
+  const port = resolvePort(paths);
+  const day = (iso: string | null | undefined): string => {
+    const [y, m, d] = (iso ?? '').split('-');
+    return d ? `${d}/${m}/${y}` : '';
+  };
+  if (sub === 'auto') {
+    enableAutoRate(paths);
+    line('ok', 'Câmbio automático ligado', 'busca a cotação PTAX do dólar no Banco Central a cada 6 horas (sem enviar nenhum dado seu)');
+    if (!(await getHealth(port))) {
+      console.log(dim('      O servidor está parado; a primeira consulta acontece quando ele subir (agent-office start).'));
+      return 0;
+    }
+    // O servidor relê o config.json sozinho e consulta em seguida: espera a primeira resposta.
+    for (let i = 0; i < 40; i++) {
+      const exchange = (await getHealth(port))?.exchange;
+      if (exchange?.enabled && exchange.rate) {
+        line('ok', 'Cotação', `${formatRate(exchange.rate)} (PTAX de ${day(exchange.asOf)})`);
+        return 0;
+      }
+      if (exchange?.enabled && exchange.error) {
+        line('warn', 'Cotação', `a consulta falhou (${exchange.error}); o servidor tenta de novo em 15 minutos`);
+        return 0;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    line('warn', 'Cotação', 'o servidor ainda não respondeu; reinicie-o se ele for de uma versão anterior (agent-office restart)');
+    return 0;
+  }
   if (sub !== 'status') {
     const r = setRate(paths, sub);
     line(r.ok ? 'ok' : 'fail', r.ok ? 'Câmbio definido' : 'Câmbio', r.ok ? `${r.detail} — o painel de dados já usa o novo valor` : r.detail);
     return r.ok ? 0 : 1;
   }
   const mine = currentRate(paths);
+  if (isAutoRate(paths)) {
+    const exchange = (await getHealth(port))?.exchange;
+    if (exchange?.rate) line('ok', 'Câmbio', `${formatRate(exchange.rate)} (PTAX de ${day(exchange.asOf)}, automático pelo Banco Central)`);
+    else line('warn', 'Câmbio', `automático pelo Banco Central, ainda sem cotação${exchange?.error ? ` (${exchange.error})` : ''}`);
+    if (exchange?.rate && exchange.error) console.log(dim(`      última consulta falhou: ${exchange.error}`));
+    return 0;
+  }
   if (mine !== undefined) {
     line('ok', 'Câmbio', `${formatRate(mine)} (definido por você)`);
     return 0;
   }
-  const server = await getServerRate(resolvePort(paths));
+  const server = await getServerRate(port);
   if (server) {
-    const [y, m, d] = (server.asOf ?? '').split('-');
-    line('ok', 'Câmbio', `${formatRate(server.rate)} (referência embutida${d ? ` de ${d}/${m}/${y}` : ''})`);
+    line('ok', 'Câmbio', `${formatRate(server.rate)} (referência embutida${server.asOf ? ` de ${day(server.asOf)}` : ''})`);
   } else {
     line('warn', 'Câmbio', 'referência embutida (o servidor está parado; inicie-o para ver o valor)');
   }
-  console.log(dim('      Para usar a cotação de hoje, informe quantos reais vale um dólar: agent-office rate 5,43'));
+  console.log(dim('      Para a cotação do dia: agent-office rate auto (consulta o Banco Central) ou agent-office rate 5,43 (valor seu).'));
   return 0;
 }
 

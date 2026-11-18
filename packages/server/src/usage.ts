@@ -14,6 +14,7 @@ import {
   priceOf,
   priceVariant,
   splitPriceKey,
+  type ExchangeRate,
   type ModelPrice,
   type PriceKind,
   type PriceOverrides,
@@ -255,8 +256,8 @@ export interface UsageLedgerOptions {
   log?: (msg: string) => void;
   /** Preços por modelo vindos da configuração (completam a tabela embutida). */
   prices?: () => PriceOverrides;
-  /** Câmbio (reais por dólar) vindo da configuração; sem ele vale a referência embutida. */
-  usdBrl?: () => number | undefined;
+  /** Câmbio do config.json ou do Banco Central; sem ele vale a referência embutida. */
+  exchange?: () => ExchangeRate | undefined;
 }
 
 export class UsageLedger extends EventEmitter<{ change: [] }> {
@@ -273,8 +274,12 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
   private stopped = false;
   private done = 0;
   private readonly prices: () => PriceOverrides | undefined;
-  private readonly usdBrl: () => number | undefined;
-  private cached: { day: number; prices: PriceOverrides | undefined; value: Omit<UsageResponse, 'updatedAt' | 'scan' | 'cost'> & { cost: Omit<UsageResponse['cost'], 'usdBrl' | 'usdBrlAsOf'> } } | null = null;
+  private readonly exchange: () => ExchangeRate | undefined;
+  private cached: {
+    day: number;
+    prices: PriceOverrides | undefined;
+    value: Omit<UsageResponse, 'updatedAt' | 'scan' | 'cost'> & { cost: Omit<UsageResponse['cost'], 'usdBrl' | 'usdBrlAsOf' | 'usdBrlSource'> };
+  } | null = null;
   private dayLo = 0;
   private dayHi = 0;
 
@@ -286,7 +291,7 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     this.now = opts.now ?? Date.now;
     this.log = opts.log ?? (() => undefined);
     this.prices = opts.prices ?? (() => undefined);
-    this.usdBrl = opts.usdBrl ?? (() => undefined);
+    this.exchange = opts.exchange ?? (() => undefined);
     db.exec(SCHEMA);
     if (db.prepare("SELECT value FROM usage_meta WHERE key = 'format'").get()?.value !== FORMAT) {
       const had = db.prepare('SELECT 1 AS x FROM usage_files LIMIT 1').get();
@@ -635,10 +640,10 @@ export class UsageLedger extends EventEmitter<{ change: [] }> {
     if (!this.cached || this.cached.day !== today || this.cached.prices !== prices) {
       this.cached = { day: today, prices, value: this.compute(now, today, prices) };
     }
-    const custom = this.usdBrl();
+    const exchange: ExchangeRate = this.exchange() ?? { ...USD_BRL, source: 'embedded' };
     return {
       ...this.cached.value,
-      cost: { ...this.cached.value.cost, usdBrl: custom ?? USD_BRL.rate, usdBrlAsOf: custom === undefined ? USD_BRL.asOf : null },
+      cost: { ...this.cached.value.cost, usdBrl: exchange.rate, usdBrlAsOf: exchange.asOf, usdBrlSource: exchange.source },
       updatedAt: now,
       scan: { pending: this.queue.size, done: this.done, scanning: this.worker !== null && this.queue.size > 0 },
     };

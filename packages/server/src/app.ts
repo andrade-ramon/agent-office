@@ -28,6 +28,7 @@ import { CodexCloudWatcher, type CodexCloudSettings, type ListCloudTasks } from 
 import type { PeerConfig } from './config.js';
 import { PeerManager, type PeerDeps } from './peers.js';
 import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
+import { RateWatcher, type FetchPtax } from './exchange-rate.js';
 import type { PriceOverrides } from './pricing.js';
 import { UsageLedger } from './usage.js';
 import { TranscriptWatcher } from './watcher.js';
@@ -61,7 +62,13 @@ export interface AppOptions {
   /** Sessões do Claude Code na nuvem, consultadas pela CLI do Claude (opcional, experimental). */
   claudeCloud?: { settings: () => ClaudeCloudSettings; list?: ListClaudeCloud; intervalMs?: number };
   /** Painel de dados: preços por modelo vindos do config.json (lido a cada consulta). */
-  usage?: { prices?: () => PriceOverrides; usdBrl?: () => number | undefined };
+  usage?: {
+    prices?: () => PriceOverrides;
+    /** Câmbio digitado no config.json. */
+    usdBrl?: () => number | undefined;
+    /** Câmbio automático: consulta opcional da PTAX no Banco Central. */
+    autoRate?: { enabled: () => boolean; fetch?: FetchPtax; intervalMs?: number };
+  };
   /** Outras máquinas cujas sessões este escritório espelha (lido a cada passo). */
   peers?: { settings: () => PeerConfig[]; deps?: PeerDeps; intervalMs?: number };
   tickMs?: number;
@@ -144,11 +151,21 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
   const startedAt = Date.now();
   const store = new SessionStore(opts.store);
   const db = await HistoryDb.open(opts.dbPath);
+  // No modo demo nada é consultado fora: o câmbio é o do config.json ou a referência embutida.
+  const rates =
+    opts.usage?.autoRate && !opts.demo ? new RateWatcher(db.handle, opts.usage.autoRate.enabled, opts.usage.autoRate.fetch, Date.now, log) : null;
   const usage = new UsageLedger(db.handle, {
     log,
     ...(opts.usage?.prices ? { prices: opts.usage.prices } : {}),
-    ...(opts.usage?.usdBrl ? { usdBrl: opts.usage.usdBrl } : {}),
+    exchange: () => {
+      const auto = rates?.current();
+      if (auto) return auto;
+      const typed = opts.usage?.usdBrl?.();
+      return typed === undefined ? undefined : { rate: typed, asOf: null, source: 'config' };
+    },
   });
+  // Câmbio novo muda o custo em reais: avisa os clientes como qualquer outra mudança.
+  rates?.on('change', () => usage.emit('change'));
   const fastify = Fastify({ logger: false, bodyLimit: 512 * 1024 });
   const wss = new WebSocketServer({ noServer: true });
 
@@ -262,6 +279,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       codexCloud: cloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
       claudeCloud: claudeCloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
       peers: peers?.status() ?? [],
+      exchange: rates?.status() ?? { enabled: false, rate: null, asOf: null, lastOkAt: null, error: null },
     };
   });
 
@@ -439,6 +457,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       cloud?.start(opts.codexCloud?.intervalMs);
       claudeCloud?.start(opts.claudeCloud?.intervalMs);
       peers?.start(opts.peers?.intervalMs);
+      rates?.start(opts.usage?.autoRate?.intervalMs);
       return port;
     },
     async close() {
@@ -451,6 +470,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       cloud?.stop();
       claudeCloud?.stop();
       peers?.stop();
+      rates?.stop();
       await watcher?.stop();
       await usage.stop();
       for (const ws of wss.clients) ws.terminate();

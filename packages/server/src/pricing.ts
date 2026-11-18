@@ -17,9 +17,21 @@ export const PRICES_AS_OF = '2026-11-18';
 /**
  * Câmbio de referência para mostrar o custo em reais: PTAX de venda do Banco
  * Central no dia indicado. Fica fixo no código (nada é consultado fora da
- * máquina); o valor do dia entra por `agent-office rate <valor>`.
+ * máquina); outro valor entra por `agent-office rate <valor>`, e a cotação do
+ * dia por `agent-office rate auto` (consulta opcional ao Banco Central).
  */
 export const USD_BRL = { rate: 5.7851, asOf: '2026-11-17' } as const;
+
+/** De onde vem o câmbio: a referência do código, o valor do config.json ou a PTAX consultada no Banco Central. */
+export type RateSource = 'embedded' | 'config' | 'bcb';
+
+export interface ExchangeRate {
+  /** Reais por dólar. */
+  rate: number;
+  /** Dia da cotação (AAAA-MM-DD); null quando o valor foi digitado pelo usuário. */
+  asOf: string | null;
+  source: RateSource;
+}
 
 /** Valida o câmbio do config.json ("usdBrl"): reais por dólar. */
 export function parseUsdBrl(raw: unknown): number | undefined {

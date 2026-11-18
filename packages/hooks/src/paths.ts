@@ -116,6 +116,8 @@ export interface OfficeConfig {
   peers?: PeerEntry[];
   /** Câmbio (reais por dólar) para o custo em reais do painel de dados. */
   usdBrl?: number;
+  /** Busca a cotação do dólar no Banco Central (opcional). */
+  usdBrlAuto?: boolean;
 }
 
 export function readConfig(paths: Paths): OfficeConfig {
