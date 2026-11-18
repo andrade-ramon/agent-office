@@ -27,21 +27,26 @@ const INK = {
   codex: 0x7fb2ff,
 } as const;
 
-const KPI_COLORS = [INK.amber, INK.green, INK.blue, INK.cyan, INK.pink, INK.purple];
+const KPI_COLORS = [INK.amber, INK.green, INK.green, INK.blue, INK.cyan, INK.pink, INK.purple];
 const MIX_COLORS = [INK.green, INK.amber, INK.blue, INK.purple];
 /** Colunas dos indicadores (x e largura útil, em pixels do mundo). */
 const COLS = [
-  { x: 8, w: 104 },
-  { x: 118, w: 98 },
-  { x: 222, w: 66 },
-  { x: 294, w: 96 },
-  { x: 396, w: 70 },
-  { x: 472, w: 90 },
+  { x: 8, w: 84 },
+  { x: 98, w: 82 },
+  { x: 186, w: 82 },
+  { x: 274, w: 56 },
+  { x: 336, w: 74 },
+  { x: 416, w: 62 },
+  { x: 484, w: 78 },
 ] as const;
+/** Linhas do bloco de indicadores: rótulo, valor e as duas linhas de apoio. */
+const KPI_Y = { label: 12.2, value: 18.2, subs: [37.2, 44.2] } as const;
+/** Faixa de baixo: títulos, linhas de texto e gráfico. */
+const BAND_Y = 55.2;
 const MIX_STEP = 126;
-const CHART = { x: 262, y: 60, w: 196, h: 13, bar: 12, gap: 2 } as const;
+const CHART = { x: 262, y: 63, w: 196, h: 12, bar: 12, gap: 2 } as const;
 const SIDE = { x: 466, w: 96 } as const;
-const ROWS_Y = [59.5, 66.6] as const;
+const ROWS_Y = [62, 69] as const;
 /** Cada quadro do canto fica este tempo na tela. */
 const PAGE_MS = 6000;
 /** Quanto os números demoram para alcançar um valor novo. */
@@ -58,7 +63,7 @@ export class DataBoard {
   private readonly detail: Text;
   private readonly status: Text;
   private readonly kpiValue: Text[] = [];
-  private readonly kpiSub: Text[] = [];
+  private readonly kpiSub: Text[][] = [];
   private readonly mix: Text[] = [];
   private readonly pageTitle: Text;
   private readonly pageName: Text[] = [];
@@ -77,40 +82,40 @@ export class DataBoard {
     this.w = rect.w - b * 2;
 
     const lines = new Graphics();
-    lines.rect(6, 11, this.w - 12, 1).rect(6, 50, this.w - 12, 1);
-    for (const col of COLS.slice(1)) lines.rect(col.x - 4, 14, 1, 34);
-    lines.rect(CHART.x - 5, 53, 1, 21).rect(SIDE.x - 5, 53, 1, 21);
+    lines.rect(6, 10, this.w - 12, 1).rect(6, 53, this.w - 12, 1);
+    for (const col of COLS.slice(1)) lines.rect(col.x - 4, 13, 1, 38);
+    lines.rect(CHART.x - 5, 56, 1, 20).rect(SIDE.x - 5, 56, 1, 20);
     lines.fill({ color: INK.line });
     this.view.addChild(lines, this.chart, this.liveDot);
 
-    const title = this.text('PAINEL DE DADOS', 8, 2.6, 6, INK.cyan, '700', 0.5);
+    const title = this.text('PAINEL DE DADOS', 8, 2.2, 6, INK.cyan, '700', 0.5);
     this.titleEnd = title.x + title.width;
-    this.detail = this.text('', this.titleEnd + 5, 2.6, 6, INK.muted);
-    this.status = this.text('', this.w - 8, 2.6, 6, INK.muted, '700');
+    this.detail = this.text('', this.titleEnd + 5, 2.2, 6, INK.muted);
+    this.status = this.text('', this.w - 8, 2.2, 6, INK.muted, '700');
     this.status.anchor.set(1, 0);
 
     COLS.forEach((col, i) => {
-      this.text(this.model.kpis[i]!.label, col.x, 13.4, 6.4, KPI_COLORS[i]!, '700', 0.4);
-      this.kpiValue.push(this.text('—', col.x - 0.5, 20.2, 16, INK.bright, '700'));
-      this.kpiSub.push(this.text('', col.x, 41, 6.3, INK.muted));
+      this.text(this.model.kpis[i]!.label, col.x, KPI_Y.label, 6.4, KPI_COLORS[i]!, '700', 0.4);
+      this.kpiValue.push(this.text('—', col.x - 0.5, KPI_Y.value, 15, INK.bright, '700'));
+      this.kpiSub.push(KPI_Y.subs.map((y) => this.text('', col.x, y, 6.3, INK.muted)));
     });
 
-    this.text('COMPOSIÇÃO DOS TOKENS', 8, 52.6, 5.8, INK.dim, '700', 0.3);
+    this.text('COMPOSIÇÃO DOS TOKENS', 8, BAND_Y, 5.8, INK.dim, '700', 0.3);
     for (let i = 0; i < 4; i++) {
       this.mix.push(this.text('', 13 + (i % 2) * MIX_STEP, ROWS_Y[Math.floor(i / 2)]!, 6.3, INK.muted));
     }
 
-    this.text('ÚLTIMOS 14 DIAS', CHART.x, 52.6, 5.8, INK.dim, '700', 0.3);
-    const codex = this.text('Codex', CHART.x + CHART.w, 52.6, 5.8, INK.muted);
+    this.text('ÚLTIMOS 14 DIAS', CHART.x, BAND_Y, 5.8, INK.dim, '700', 0.3);
+    const codex = this.text('Codex', CHART.x + CHART.w, BAND_Y, 5.8, INK.muted);
     codex.anchor.set(1, 0);
-    const claude = this.text('Claude', CHART.x + CHART.w - codex.width - 9, 52.6, 5.8, INK.muted);
+    const claude = this.text('Claude', CHART.x + CHART.w - codex.width - 9, BAND_Y, 5.8, INK.muted);
     claude.anchor.set(1, 0);
     const legend = new Graphics();
-    legend.rect(codex.x - codex.width - 5, 54.6, 3, 3).fill({ color: INK.codex });
-    legend.rect(claude.x - claude.width - 5, 54.6, 3, 3).fill({ color: INK.claude });
+    legend.rect(codex.x - codex.width - 5, BAND_Y + 2, 3, 3).fill({ color: INK.codex });
+    legend.rect(claude.x - claude.width - 5, BAND_Y + 2, 3, 3).fill({ color: INK.claude });
     this.view.addChild(legend);
 
-    this.pageTitle = this.text('', SIDE.x, 52.6, 5.8, INK.dim, '700', 0.3);
+    this.pageTitle = this.text('', SIDE.x, BAND_Y, 5.8, INK.dim, '700', 0.3);
     for (const y of ROWS_Y) {
       this.pageName.push(this.text('', SIDE.x, y, 6.3, INK.muted));
       const value = this.text('', SIDE.x + SIDE.w, y, 6.3, INK.bright, '700');
@@ -159,11 +164,13 @@ export class DataBoard {
     this.status.style.fill = m.live ? INK.green : INK.amber;
     this.fit(this.detail, this.w - 8 - this.status.width - 12 - (this.titleEnd + 5));
     this.liveDot.clear();
-    this.liveDot.rect(this.w - 8 - this.status.width - 6, 5, 3, 3).fill({ color: m.live ? INK.green : INK.amber });
+    this.liveDot.rect(this.w - 8 - this.status.width - 6, 4.6, 3, 3).fill({ color: m.live ? INK.green : INK.amber });
 
     m.kpis.forEach((kpi, i) => {
-      this.kpiSub[i]!.text = kpi.sub;
-      this.fit(this.kpiSub[i]!, COLS[i]!.w);
+      this.kpiSub[i]!.forEach((line, row) => {
+        line.text = kpi.subs[row] ?? '';
+        this.fit(line, COLS[i]!.w);
+      });
     });
     m.mix.forEach((label, i) => {
       this.mix[i]!.text = label;
@@ -239,7 +246,7 @@ export class DataBoard {
     return {
       status: this.status.text,
       detail: this.detail.text,
-      kpis: this.model.kpis.map((kpi, i) => ({ label: kpi.label, value: this.kpiValue[i]!.text, sub: kpi.sub })),
+      kpis: this.model.kpis.map((kpi, i) => ({ label: kpi.label, value: this.kpiValue[i]!.text, subs: kpi.subs })),
       mix: this.mix.map((t) => t.text),
       page: { title: this.pageTitle.text, rows: this.pageName.map((n, i) => [n.text, this.pageValue[i]!.text]) },
       bars: this.model.bars.length,

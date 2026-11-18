@@ -173,9 +173,9 @@ export function formatHoursShort(ms: number): string {
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}`;
 }
 
-/** Valor em dólares sem o símbolo: "34,20", "8.412", "123,5 mil", "1,23 mi". */
-export function formatUsdShort(usd: number): string {
-  const v = Math.max(0, usd);
+/** Valor em dinheiro sem o símbolo: "34,20", "8.412", "123,5 mil", "1,23 mi". */
+export function formatMoney(amount: number): string {
+  const v = Math.max(0, amount);
   if (v < 100) return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (v < 99_999.5) return formatNumber(Math.round(v));
   return formatTokens(v);
@@ -183,7 +183,12 @@ export function formatUsdShort(usd: number): string {
 
 /** 8412.3 → "US$ 8.412". */
 export function formatUsd(usd: number): string {
-  return `US$ ${formatUsdShort(usd)}`;
+  return `US$ ${formatMoney(usd)}`;
+}
+
+/** 23610.4 → "R$ 23.610". */
+export function formatBrl(brl: number): string {
+  return `R$ ${formatMoney(brl)}`;
 }
 
 /** 1732000000000 → "18/11". */

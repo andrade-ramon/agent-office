@@ -6,8 +6,9 @@ import {
   formatHoursShort,
   formatNumber,
   formatTokens,
+  formatBrl,
+  formatMoney,
   formatUsd,
-  formatUsdShort,
 } from '../i18n';
 
 /**
@@ -20,8 +21,8 @@ export interface BoardKpi {
   /** Valor acumulado (animado até chegar aqui). */
   value: number;
   format(value: number): string;
-  /** Linha de apoio: hoje e últimos 7 dias. */
-  sub: string;
+  /** Duas linhas de apoio: em geral, hoje e os últimos 7 dias. */
+  subs: [string, string];
 }
 
 export interface BoardBar {
@@ -50,7 +51,7 @@ export interface BoardModel {
   pages: BoardPage[];
 }
 
-export const KPI_LABELS = ['TOKENS', 'CUSTO ESTIMADO', 'PROMPTS', 'TEMPO ATIVO', 'SESSÕES', 'FERRAMENTAS'] as const;
+export const KPI_LABELS = ['TOKENS', 'CUSTO ESTIMADO', 'CUSTO EM REAIS', 'PROMPTS', 'TEMPO ATIVO', 'SESSÕES', 'FERRAMENTAS'] as const;
 export const MIX_LABELS = ['entrada', 'saída', 'cache lido', 'cache gravado'] as const;
 
 /** Contagens grandes: inteiras até 9.999, depois "59,3 mil". */
@@ -73,9 +74,6 @@ function pct(part: number, total: number): string {
   return `${v >= 10 || v === 0 ? Math.round(v) : v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 }
 
-function recent(today: string, week: string): string {
-  return `hoje ${today} · 7 d ${week}`;
-}
 
 export function boardModel(usage: UsageResponse | null): BoardModel {
   if (!usage) {
@@ -83,7 +81,7 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
       detail: 'aguardando o servidor',
       status: 'sem dados',
       live: false,
-      kpis: KPI_LABELS.map((label) => ({ label, value: 0, format: () => '—', sub: '' })),
+      kpis: KPI_LABELS.map((label) => ({ label, value: 0, format: () => '—', subs: ['', ''] })),
       mix: MIX_LABELS.map((label) => `${label} —`),
       bars: [],
       barMax: 0,
@@ -92,28 +90,37 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
   }
 
   const all = usage.allTime;
-  const pick = (get: (t: UsageTotals) => number, format: (n: number) => string): string =>
-    recent(format(get(usage.today)), format(get(usage.week)));
+  const recent = (get: (t: UsageTotals) => number, format: (n: number) => string): [string, string] => [
+    `hoje ${format(get(usage.today))}`,
+    `7 dias ${format(get(usage.week))}`,
+  ];
 
   // Com algum modelo fora da tabela de preços, o total é um piso.
   const partial = usage.cost.unpricedTokens > 0;
+  const floor = partial ? '≥ ' : '';
+  // O custo nasce em dólares (preço de tabela das APIs); os reais usam um câmbio só.
+  const rate = usage.cost.usdBrl;
   const kpis: BoardKpi[] = [
-    { label: KPI_LABELS[0], value: all.tokens.total, format: formatTokens, sub: pick((t) => t.tokens.total, formatTokens) },
+    { label: KPI_LABELS[0], value: all.tokens.total, format: formatTokens, subs: recent((t) => t.tokens.total, formatTokens) },
+    { label: KPI_LABELS[1], value: all.costUsd, format: (v) => `${floor}${formatUsd(v)}`, subs: recent((t) => t.costUsd, formatMoney) },
     {
-      label: KPI_LABELS[1],
-      value: all.costUsd,
-      format: (v) => `${partial ? '≥ ' : ''}${formatUsd(v)}`,
-      sub: pick((t) => t.costUsd, formatUsdShort),
+      label: KPI_LABELS[2],
+      value: all.costUsd * rate,
+      format: (v) => `${floor}${formatBrl(v)}`,
+      subs: recent((t) => t.costUsd * rate, formatMoney),
     },
-    { label: KPI_LABELS[2], value: all.prompts, format: formatCount, sub: pick((t) => t.prompts, formatCount) },
-    { label: KPI_LABELS[3], value: all.activeMs, format: formatHours, sub: pick((t) => t.activeMs, formatHoursShort) },
+    { label: KPI_LABELS[3], value: all.prompts, format: formatCount, subs: recent((t) => t.prompts, formatCount) },
+    { label: KPI_LABELS[4], value: all.activeMs, format: formatHours, subs: recent((t) => t.activeMs, formatHoursShort) },
     {
-      label: KPI_LABELS[4],
+      label: KPI_LABELS[5],
       value: all.sessions,
       format: formatCount,
-      sub: `+ ${formatCount(all.subagents)} ${all.subagents === 1 ? 'subagente' : 'subagentes'}`,
+      subs: [
+        `hoje ${formatCount(usage.today.sessions)} · 7 d ${formatCount(usage.week.sessions)}`,
+        `+ ${formatCount(all.subagents)} ${all.subagents === 1 ? 'subagente' : 'subagentes'}`,
+      ],
     },
-    { label: KPI_LABELS[5], value: all.tools, format: formatCount, sub: pick((t) => t.tools, formatCount) },
+    { label: KPI_LABELS[6], value: all.tools, format: formatCount, subs: recent((t) => t.tools, formatCount) },
   ];
 
   const t = all.tokens;
@@ -181,10 +188,11 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
   }
 
   const scan = usage.scan;
+  const exchange = `US$ 1 = R$ ${rate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const detail =
     usage.since === null
       ? 'nenhuma sessão registrada ainda'
-      : `acumulado desde ${formatDate(usage.since)} · ${formatNumber(usage.activeDays)} ${usage.activeDays === 1 ? 'dia' : 'dias'} com atividade`;
+      : `acumulado desde ${formatDate(usage.since)} · ${formatNumber(usage.activeDays)} ${usage.activeDays === 1 ? 'dia' : 'dias'} com atividade · ${exchange}`;
   return {
     detail,
     status: scan.scanning ? `lendo o histórico · faltam ${formatNumber(scan.pending)} arquivos` : 'ao vivo',

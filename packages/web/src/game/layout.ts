@@ -547,7 +547,7 @@ export function buildOffice(): OfficeLayout {
     ],
     labels,
     // Tiles 4 a 39 da parede; sobra uma faixa de parede e o rodapé embaixo.
-    dashboard: { x: 4 * TILE, y: 28 * TILE + 4, w: 36 * TILE, h: 82 },
+    dashboard: { x: 4 * TILE, y: 28 * TILE + 2, w: 36 * TILE, h: 84 },
   };
 }
 
