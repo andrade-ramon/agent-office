@@ -188,7 +188,10 @@ export function boardModel(usage: UsageResponse | null): BoardModel {
   }
 
   const scan = usage.scan;
-  const exchange = `US$ 1 = R$ ${rate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // "2026-11-17" → "17/11": o dia da cotação, quando ela tem um (PTAX do Banco Central ou a referência embutida).
+  const [, month, dayOfMonth] = (usage.cost.usdBrlAsOf ?? '').split('-');
+  const quoted = dayOfMonth && month ? ` (PTAX de ${dayOfMonth}/${month})` : '';
+  const exchange = `US$ 1 = R$ ${rate.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${quoted}`;
   const detail =
     usage.since === null
       ? 'nenhuma sessão registrada ainda'

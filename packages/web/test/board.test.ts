@@ -40,7 +40,7 @@ function usage(over: Partial<UsageResponse> = {}): UsageResponse {
       { name: 'gpt-6.1-sol', tokens: 1_954_113_686, costUsd: 260.5 },
       { name: 'claude-fable-5-2', tokens: 798_179_046, costUsd: 1500 },
     ],
-    cost: { pricesAsOf: '2026-11-18', unpricedTokens: 0, unpriced: [], usdBrl: 5.5, usdBrlAsOf: '2026-11-17' },
+    cost: { pricesAsOf: '2026-11-18', unpricedTokens: 0, unpriced: [], usdBrl: 5.5, usdBrlAsOf: '2026-11-17', usdBrlSource: 'bcb' },
     projects: [{ name: 'um-projeto-de-nome-bem-comprido', tokens: 9_000_000 }],
     activeDays: 80,
     busiestDay: { day: new Date(2026, 8, 24).getTime(), tokens: 1_362_026_107 },
@@ -103,7 +103,7 @@ describe('boardModel (o que o telão escreve)', () => {
       ['FERRAMENTAS', '59,3 mil', 'hoje 81', '7 dias 11,4 mil'],
     ]);
     expect(m.mix).toEqual(['entrada 17,82 mi', 'saída 37,13 mi', 'cache lido 14,76 bi', 'cache gravado 189,52 mi']);
-    expect(m.detail).toBe('acumulado desde 18/07/2026 · 80 dias com atividade · US$ 1 = R$ 5,50');
+    expect(m.detail).toBe('acumulado desde 18/07/2026 · 80 dias com atividade · US$ 1 = R$ 5,50 (PTAX de 17/11)');
     expect(m).toMatchObject({ status: 'ao vivo', live: true, barMax: 135 });
     expect(m.bars).toHaveLength(14);
     expect(m.bars.at(-1)).toEqual({ claude: 130, codex: 5, today: true });
@@ -166,10 +166,12 @@ describe('boardModel (o que o telão escreve)', () => {
 
   it('marca o custo como piso quando algum modelo não tem preço', () => {
     const m = boardModel(
-      usage({ cost: { pricesAsOf: '2026-11-18', unpricedTokens: 5_000_000, unpriced: [{ name: 'modelo-novo-9', tokens: 5_000_000 }], usdBrl: 5.5, usdBrlAsOf: null } }),
+      usage({ cost: { pricesAsOf: '2026-11-18', unpricedTokens: 5_000_000, unpriced: [{ name: 'modelo-novo-9', tokens: 5_000_000 }], usdBrl: 5.5, usdBrlAsOf: null, usdBrlSource: 'config' } }),
     );
     expect(m.kpis[1]!.format(8412.37)).toBe('≥ US$ 8.412');
     expect(m.kpis[2]!.format(46_268)).toBe('≥ R$ 46.268');
+    // câmbio digitado pelo usuário: sem data de cotação
+    expect(m.detail).toBe('acumulado desde 18/07/2026 · 80 dias com atividade · US$ 1 = R$ 5,50');
     expect(m.pages.find((p) => p.title === 'MODELOS SEM PREÇO')?.rows).toEqual([['modelo-novo-9', '5 mi']]);
   });
 });
