@@ -24,6 +24,7 @@ import {
 } from '../src/install.js';
 import { currentAlert, describeAlert, disableAlert, enableAlert } from '../src/alert.js';
 import { currentCloud, disableCloud, enableCloud } from '../src/cloud.js';
+import { addPeer, listPeers, removePeer } from '../src/peers.js';
 import { getPaths, HOOK_MARKER, readConfig, writeConfig, type Paths } from '../src/paths.js';
 import { launchdPlist, systemdUnit, windowsTaskArgs, type ServiceSpec } from '../src/service.js';
 
@@ -442,5 +443,41 @@ describe('sessões em nuvem (config)', () => {
     disableCloud(paths, 'claude');
     expect(currentCloud(paths, 'claude')).toEqual({ enabled: false, bin: '/x/claude', everySec: 120 });
     expect(currentCloud(paths, 'codex')).toMatchObject({ enabled: true, bin: '/x/codex' });
+  });
+});
+
+describe('outras máquinas (config)', () => {
+  it('cadastra, substitui e remove sem tocar no resto do config.json', () => {
+    writeConfig(paths, { port: 4800, voiceAlert: { enabled: true, text: 'Ramon' } });
+    expect(listPeers(paths)).toEqual([]);
+
+    expect(addPeer(paths, { name: 'macbook-casa', ssh: 'ramon@macbook.local' })).toMatchObject({
+      ok: true,
+      detail: 'túnel SSH até ramon@macbook.local, porta 4747',
+      peer: { name: 'macbook-casa', ssh: 'ramon@macbook.local', remotePort: 4747 },
+    });
+    expect(addPeer(paths, { name: 'ci', url: 'http://127.0.0.1:4751/' })).toMatchObject({ ok: true, peer: { name: 'ci', url: 'http://127.0.0.1:4751' } });
+    // mesmo nome: substitui
+    addPeer(paths, { name: 'macbook-casa', ssh: 'macbook', remotePort: 5000 });
+    expect(listPeers(paths)).toEqual([
+      { name: 'ci', url: 'http://127.0.0.1:4751' },
+      { name: 'macbook-casa', ssh: 'macbook', remotePort: 5000 },
+    ]);
+    expect(readConfig(paths)).toMatchObject({ port: 4800, voiceAlert: { text: 'Ramon' } });
+
+    expect(removePeer(paths, 'não-existe')).toBe(false);
+    expect(removePeer(paths, 'ci')).toBe(true);
+    expect(listPeers(paths).map((p) => p.name)).toEqual(['macbook-casa']);
+  });
+
+  it('recusa nomes, destinos e endereços perigosos', () => {
+    writeConfig(paths, { port: 4800 });
+    expect(addPeer(paths, { name: 'x', ssh: '-oProxyCommand=calc' }).ok).toBe(false);
+    expect(addPeer(paths, { name: 'x', ssh: 'host;reboot' }).ok).toBe(false);
+    expect(addPeer(paths, { name: 'x', url: 'http://192.168.0.10:4747' }).ok).toBe(false);
+    expect(addPeer(paths, { name: '../x', ssh: 'host' }).ok).toBe(false);
+    expect(addPeer(paths, { name: 'x' }).ok).toBe(false);
+    expect(addPeer(paths, { name: 'x', ssh: 'host', url: 'http://127.0.0.1:1' }).ok).toBe(false);
+    expect(listPeers(paths)).toEqual([]);
   });
 });

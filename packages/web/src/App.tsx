@@ -107,6 +107,10 @@ export function App({ store }: { store: OfficeStore }): ReactElement {
   const focusWindow = useCallback(
     (key: string) => {
       const session = store.getState().sessions.get(key);
+      if (session?.machine && !session.remote) {
+        toast(`Esta sessão roda em outra máquina (${session.machine}).`, 'warn');
+        return;
+      }
       if (session?.remote) {
         // Sessão na nuvem: não há janela local; abre a tarefa no site do agente.
         if (session.url && /^https:\/\//i.test(session.url)) {

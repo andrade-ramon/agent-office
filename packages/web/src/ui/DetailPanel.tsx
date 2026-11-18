@@ -74,6 +74,11 @@ export function DetailPanel(p: Props): ReactElement {
             <span className={`agent-tag agent-${s.agent}`}>{AGENT_LABEL[s.agent]}</span>
             {s.parentKey && <span className="agent-tag sub">subagente</span>}
             {s.remote && <span className="agent-tag cloud">nuvem</span>}
+            {s.machine && (
+              <span className="agent-tag machine" title="Sessão espelhada do agent-office de outra máquina">
+                {s.machine}
+              </span>
+            )}
           </div>
         </div>
         <button type="button" className="tool" onClick={p.onClose} title="Fechar (Esc)" aria-label="Fechar">
@@ -104,7 +109,13 @@ export function DetailPanel(p: Props): ReactElement {
             Abrir no site
           </button>
         ) : (
-          <button type="button" className="btn" onClick={p.onFocusWindow} title="Traz o terminal ou app da sessão para a frente">
+          <button
+            type="button"
+            className="btn"
+            onClick={p.onFocusWindow}
+            disabled={Boolean(s.machine)}
+            title={s.machine ? `A janela desta sessão está em outra máquina (${s.machine})` : 'Traz o terminal ou app da sessão para a frente'}
+          >
             <Icon name="window" size={12} />
             Abrir janela
           </button>
@@ -114,6 +125,7 @@ export function DetailPanel(p: Props): ReactElement {
       <div className="detail-scroll">
         <dl className="fields">
           <Field label="Assunto">{s.title || <span className="muted">sem título</span>}</Field>
+          {s.machine && <Field label="Máquina">{s.machine}</Field>}
           <Field label={s.remote ? 'Ambiente' : 'Projeto'}>{s.project || '—'}</Field>
           {s.remote && (s.changes || s.agent === 'codex') && (
             <Field label="Alterações">

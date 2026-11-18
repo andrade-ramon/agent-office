@@ -107,8 +107,8 @@ export function sourceLabel(s: SessionState, demo: boolean): string {
   const parts: string[] = [];
   if (s.sources.hook) parts.push('hooks');
   if (s.sources.watcher) parts.push('arquivo');
-  if (parts.length === 0) return demo ? 'demonstração' : '—';
-  return parts.join(' + ');
+  if (parts.length === 0) return demo ? 'demonstração' : s.machine ? `espelhada de ${s.machine}` : '—';
+  return s.machine ? `${parts.join(' + ')} · em ${s.machine}` : parts.join(' + ');
 }
 
 function pad(n: number): string {

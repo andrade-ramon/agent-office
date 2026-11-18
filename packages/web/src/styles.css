@@ -762,6 +762,17 @@ ul {
 .agent-tag.cloud {
   background: #cfe6ff;
 }
+.agent-tag.machine {
+  background: #d9c8ff;
+}
+.row-machine {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #b9a6ee;
+  font-size: 10px;
+}
 .row-cloud {
   flex: none;
   color: #cfe6ff;
@@ -814,11 +825,15 @@ ul {
   font-weight: 700;
   white-space: nowrap;
 }
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: #39415c;
 }
-.btn:active {
+.btn:active:not(:disabled) {
   transform: translate(1px, 1px);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .btn.on {
   background: #33457f;

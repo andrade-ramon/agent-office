@@ -68,6 +68,8 @@ interface Internal {
   anon: number;
   /** A sessão já reportou ferramentas por hook (mais precisas que o invólucro do watcher). */
   hookTools: boolean;
+  /** Cópia de uma sessão de outro escritório: o estado vem pronto e o ciclo de vida é de lá. */
+  mirrored?: boolean;
 }
 
 export interface ApplyOptions {
@@ -128,6 +130,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
     if (!ev.sessionId) return false;
     const key = sessionKey(ev.agent, ev.sessionId);
     let it = this.sessions.get(key);
+    if (it?.mirrored) return false;
     const ending = ev.event === 'session_end' || ev.event === 'subagent_stop';
     if (!it) {
       if (ending) return false;
@@ -256,7 +259,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
   /** Encerra uma sessão (processo saiu, arquivo arquivado, timeout). */
   end(key: string, ts: number, reason: string, opts: ApplyOptions = {}): void {
     const it = this.sessions.get(key);
-    if (!it || it.state.status === 'ended') return;
+    if (!it || it.mirrored || it.state.status === 'ended') return;
     const s = it.state;
     this.apply(
       {
@@ -281,7 +284,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
    */
   resume(key: string, ts: number): void {
     const it = this.sessions.get(key);
-    if (!it) return;
+    if (!it || it.mirrored) return;
     const s = it.state;
     if (s.status !== 'permission_wait' && s.status !== 'waiting_input') return;
     this.refreshWorking(it, ts);
@@ -290,10 +293,46 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
     this.markDirty(key);
   }
 
+  /**
+   * Espelha uma sessão de outro escritório (outra máquina). O estado é
+   * guardado como veio: prazos de inatividade e encerramento ficam por conta
+   * do escritório de origem. Uma sessão local com a mesma chave tem prioridade.
+   */
+  mirror(state: SessionState): boolean {
+    const existing = this.sessions.get(state.key);
+    if (existing && !existing.mirrored) return false;
+    const title = this.options.titles ? state.title : undefined;
+    const { title: _dropped, ...rest } = state;
+    this.sessions.set(state.key, {
+      state: { ...rest, ...(title ? { title } : {}) },
+      openTools: new Map(),
+      seenStart: new Set(),
+      seenEnd: new Set(),
+      lastByType: new Map(),
+      lastStateTs: 0,
+      anon: 0,
+      hookTools: false,
+      mirrored: true,
+    });
+    this.markDirty(state.key);
+    if (state.parentKey) this.markDirty(state.parentKey);
+    return true;
+  }
+
+  /** Remove uma sessão espelhada (as locais não são tocadas). */
+  unmirror(key: string): void {
+    const it = this.sessions.get(key);
+    if (!it?.mirrored) return;
+    const parent = it.state.parentKey;
+    this.remove(key);
+    if (parent) this.markDirty(parent);
+  }
+
   /** Aplica os timeouts de inatividade. Chamado periodicamente. */
   tick(now: number = Date.now()): void {
     const { idleAfterMs, endAfterMs, childEndAfterMs, purgeAfterMs } = this.options;
     for (const [key, it] of [...this.sessions]) {
+      if (it.mirrored) continue;
       const s = it.state;
       if (s.status === 'ended') {
         if (now - (s.endedAt ?? s.lastActivityAt) > purgeAfterMs) this.remove(key);
@@ -452,7 +491,7 @@ export class SessionStore extends EventEmitter<SessionStoreEvents> {
   private applyMeta(update: MetaUpdate): boolean {
     const key = sessionKey(update.agent, update.sessionId);
     const it = this.sessions.get(key);
-    if (!it) return false;
+    if (!it || it.mirrored) return false;
     if (update.cwd && !it.state.cwd) {
       it.state.cwd = update.cwd;
       it.state.project = projectFromCwd(update.cwd);

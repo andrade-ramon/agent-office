@@ -25,6 +25,8 @@ import { SessionStore, type StoreOptions } from './state.js';
 import { isObj, num, projectFromCwd, str } from './util.js';
 import { ClaudeCloudWatcher, type ClaudeCloudSettings, type ListClaudeCloud } from './claude-cloud.js';
 import { CodexCloudWatcher, type CodexCloudSettings, type ListCloudTasks } from './codex-cloud.js';
+import type { PeerConfig } from './config.js';
+import { PeerManager, type PeerDeps } from './peers.js';
 import { VoiceAlert, type PlayAlert, type VoiceAlertSettings } from './voice-alert.js';
 import { TranscriptWatcher } from './watcher.js';
 
@@ -54,6 +56,8 @@ export interface AppOptions {
   codexCloud?: { settings: () => CodexCloudSettings; list?: ListCloudTasks; intervalMs?: number };
   /** Sessões do Claude Code na nuvem, consultadas pela CLI do Claude (opcional, experimental). */
   claudeCloud?: { settings: () => ClaudeCloudSettings; list?: ListClaudeCloud; intervalMs?: number };
+  /** Outras máquinas cujas sessões este escritório espelha (lido a cada passo). */
+  peers?: { settings: () => PeerConfig[]; deps?: PeerDeps; intervalMs?: number };
   tickMs?: number;
   log?: (msg: string) => void;
 }
@@ -227,6 +231,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       voiceAlert: voice?.status() ?? { enabled: false, pending: 0 },
       codexCloud: cloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
       claudeCloud: claudeCloud?.status() ?? { enabled: false, running: 0, lastOkAt: null, error: null },
+      peers: peers?.status() ?? [],
     };
   });
 
@@ -241,6 +246,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
     const { key } = req.params as { key: string };
     const session = store.get(key);
     if (!session) return reply.code(404).send({ ok: false, detail: 'Sessão não encontrada.' });
+    if (session.machine) return { ok: false, detail: `Esta sessão roda em outra máquina (${session.machine}).` };
     // Subagentes vivem dentro do processo do pai.
     const target = session.parentKey ? (store.get(session.parentKey) ?? session) : session;
     return focusSession(target);
@@ -317,6 +323,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
     opts.claudeCloud && !opts.demo
       ? new ClaudeCloudWatcher(store, opts.claudeCloud.settings, opts.claudeCloud.list, Date.now, log)
       : null;
+  const peers = opts.peers && !opts.demo ? new PeerManager(store, opts.peers.settings, { log, ...opts.peers.deps }) : null;
   let demo: DemoSimulator | null = null;
   const timers: NodeJS.Timeout[] = [];
 
@@ -389,6 +396,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       voice?.start(opts.voiceAlert?.intervalMs);
       cloud?.start(opts.codexCloud?.intervalMs);
       claudeCloud?.start(opts.claudeCloud?.intervalMs);
+      peers?.start(opts.peers?.intervalMs);
       return port;
     },
     async close() {
@@ -399,6 +407,7 @@ export async function createApp(opts: AppOptions): Promise<AgentOfficeApp> {
       voice?.stop();
       cloud?.stop();
       claudeCloud?.stop();
+      peers?.stop();
       await watcher?.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));

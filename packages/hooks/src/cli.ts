@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile, spawn } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
+import { addPeer, checkSshPeer, describePeer, listPeers, removePeer } from './peers.js';
 import { CLOUD_AGENTS, cloudLabel, currentCloud, describeCloud, disableCloud, enableCloud, type CloudAgent } from './cloud.js';
 import { currentAlert, describeAlert, disableAlert, enableAlert, isAlertSound, playOnce, speakOnce } from './alert.js';
 import { runDoctor, type Level } from './doctor.js';
@@ -81,6 +82,11 @@ Uso: agent-office <comando> [opções]
   cloud        mostra também as sessões que rodam na nuvem do Codex e do Claude
                (consulta a sua conta pela CLI de cada agente; desligado por padrão)
                  on [--codex] [--claude] [--every <seg>] | off [--codex] [--claude] | status
+  peer         mostra também as sessões de outro computador seu que roda o
+               agent-office (por túnel SSH; nada passa por terceiros)
+                 add <nome> <host|usuario@host> [--port <porta de lá>]
+                 add <nome> --url http://127.0.0.1:<porta>   (túnel que você mantém)
+                 remove <nome> | status
   doctor       diagnóstico completo
   fix-settings corrige problemas conhecidos do ~/.claude/settings.json que fazem
                o Claude Code ignorar o arquivo (ex.: statusLine sem "type")
@@ -261,6 +267,11 @@ async function cmdStatus(paths: Paths): Promise<number> {
     const c = agent === 'codex' ? health?.codexCloud : health?.claudeCloud;
     line(c?.error ? 'warn' : 'ok', cloudLabel(agent), c?.error ? `consulta falhando: ${c.error}` : describeCloud(cloud, agent));
   }
+  for (const peer of listPeers(paths)) {
+    const p = health?.peers?.find((x) => x.name === peer.name);
+    const detail = p?.connected ? `conectada · ${p.sessions} ${p.sessions === 1 ? 'sessão' : 'sessões'}` : `sem conexão${p?.error ? `: ${p.error}` : ''}`;
+    line(p?.connected ? 'ok' : 'warn', `Máquina "${peer.name}"`, detail);
+  }
   if (health?.lastHookAt) {
     const fmt = (t: number | null): string => (t ? new Date(t).toLocaleTimeString() : 'nunca');
     console.log(dim(`\n  último hook recebido — Claude: ${fmt(health.lastHookAt.claude)} · Codex: ${fmt(health.lastHookAt.codex)}`));
@@ -432,6 +443,52 @@ async function cmdCloud(paths: Paths, args: string[]): Promise<number> {
   return 0;
 }
 
+async function cmdPeer(paths: Paths, args: string[]): Promise<number> {
+  const sub = args[0] ?? 'status';
+  const port = resolvePort(paths);
+  if (sub === 'add') {
+    const positional = args.slice(1).filter((a, i, all) => !a.startsWith('--') && !(all[i - 1] ?? '').startsWith('--'));
+    const [name, ssh] = positional;
+    const url = option(args, '--url');
+    const remotePort = Number(option(args, '--port'));
+    if (!name) {
+      line('fail', 'Máquina', 'uso: agent-office peer add <nome> <host|usuario@host> [--port <porta>]');
+      return 1;
+    }
+    const r = addPeer(paths, { name, ...(ssh ? { ssh } : {}), ...(url ? { url } : {}), ...(remotePort > 0 ? { remotePort } : {}) });
+    line(r.ok ? 'ok' : 'fail', r.ok ? `Máquina "${name}" cadastrada` : 'Máquina', r.detail);
+    if (!r.ok || !r.peer) return 1;
+    if (r.peer.ssh) {
+      const check = checkSshPeer(r.peer.ssh, r.peer.remotePort ?? port);
+      line(check.ok ? 'ok' : 'warn', 'Teste de acesso', check.detail);
+      if (!check.ok) console.log(dim('      O cadastro foi mantido: o servidor tenta de novo sozinho quando o acesso estiver pronto.'));
+    }
+    if (!(await getHealth(port))) console.log(dim('      O servidor está parado; a conexão começa quando ele subir (agent-office start).'));
+    return 0;
+  }
+  if (sub === 'remove' || sub === 'rm') {
+    const name = args[1] ?? '';
+    const removed = removePeer(paths, name);
+    line(removed ? 'ok' : 'fail', removed ? `Máquina "${name}" removida` : 'Máquina', removed ? 'as sessões dela saem do escritório' : `não há máquina chamada "${name}"`);
+    return removed ? 0 : 1;
+  }
+  const peers = listPeers(paths);
+  if (peers.length === 0) {
+    line('warn', 'Outras máquinas', 'nenhuma cadastrada: agent-office peer add <nome> <host|usuario@host>');
+    return 0;
+  }
+  const health = await getHealth(port);
+  for (const peer of peers) {
+    const p = health?.peers?.find((x) => x.name === peer.name);
+    line(p?.connected ? 'ok' : 'warn', `Máquina "${peer.name}"`, describePeer(peer));
+    if (!p) continue;
+    const last = p.lastOkAt ? new Date(p.lastOkAt).toLocaleTimeString() : 'nunca';
+    console.log(dim(`      ${p.connected ? 'conectada' : 'sem conexão'} · sessões: ${p.sessions} · último contato: ${last}`));
+    if (p.error) console.log(dim(`      erro: ${p.error}`));
+  }
+  return 0;
+}
+
 async function cmdAlert(paths: Paths, args: string[]): Promise<number> {
   const sub = args[0] ?? 'status';
   const port = resolvePort(paths);
@@ -550,6 +607,9 @@ async function main(): Promise<number> {
       return cmdAlert(paths, args);
     case 'cloud':
       return cmdCloud(paths, args);
+    case 'peer':
+    case 'peers':
+      return cmdPeer(paths, args);
     case 'doctor':
       return cmdDoctor(paths);
     case 'fix-settings': {

@@ -123,7 +123,7 @@ export class ClaudeProcessWatcher {
       // Na partida: sessões reconstruídas dos transcripts cujo processo já não
       // existe (ex.: `claude -p` que terminou) não devem voltar como "ociosas".
       for (const s of this.store.list()) {
-        if (s.agent === 'claude' && !s.parentKey && !s.alive && s.status !== 'ended') {
+        if (s.agent === 'claude' && !s.parentKey && !s.alive && !s.remote && !s.machine && s.status !== 'ended') {
           this.store.end(s.key, s.lastActivityAt + 1, 'no_process', { replay: true });
         }
       }

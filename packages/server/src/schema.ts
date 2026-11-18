@@ -167,6 +167,11 @@ export interface SessionState {
   /** Onde abrir a sessão remota no navegador. */
   url?: string;
   changes?: SessionChanges;
+  /**
+   * Nome da máquina de origem, quando a sessão foi espelhada do agent-office
+   * de outro computador. Ausente = roda nesta máquina (ou na nuvem).
+   */
+  machine?: string;
   counts: { prompts: number; tools: number; errors: number };
   timeline: TimelineEntry[];
   sources: { hook: boolean; watcher: boolean };
@@ -246,6 +251,16 @@ export interface HealthResponse {
   /** Sessões na nuvem de cada agente: ligado? quantas rodando? última consulta e erro. */
   codexCloud: RemoteSourceHealth;
   claudeCloud: RemoteSourceHealth;
+  /** Outros computadores cujas sessões este escritório espelha. */
+  peers: PeerHealth[];
+}
+
+export interface PeerHealth {
+  name: string;
+  connected: boolean;
+  sessions: number;
+  lastOkAt: number | null;
+  error: string | null;
 }
 
 export interface RemoteSourceHealth {

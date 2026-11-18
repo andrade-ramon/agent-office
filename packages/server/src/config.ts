@@ -30,6 +30,10 @@ export interface VoiceAlertConfig {
  * comandos da CLI (`alert on/off`, `cloud on/off`) valham sem reiniciar o servidor.
  */
 function sectionReader<T>(home: string, key: string, off: T, parse: (o: Record<string, unknown>) => T): () => T {
+  return valueReader(home, key, off, (v) => (v && typeof v === 'object' && !Array.isArray(v) ? parse(v as Record<string, unknown>) : off));
+}
+
+function valueReader<T>(home: string, key: string, off: T, parse: (v: unknown) => T): () => T {
   const file = join(home, 'config.json');
   let cached = off;
   let mtimeMs = -1;
@@ -40,7 +44,7 @@ function sectionReader<T>(home: string, key: string, off: T, parse: (o: Record<s
       mtimeMs = st.mtimeMs;
       const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
       const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>)[key] : undefined;
-      cached = v && typeof v === 'object' ? parse(v as Record<string, unknown>) : off;
+      cached = parse(v);
       return cached;
     } catch {
       mtimeMs = -1;
@@ -84,6 +88,59 @@ export function codexCloudReader(home: string = officeHome()): () => CodexCloudC
 /** Seção "claudeCloud": sessões do Claude Code que rodam na nuvem (opcional, experimental). */
 export function claudeCloudReader(home: string = officeHome()): () => CodexCloudConfig {
   return cloudReader(home, 'claudeCloud', 60);
+}
+
+export interface PeerConfig {
+  /** Nome exibido no escritório (ex.: "macbook-casa"). */
+  name: string;
+  /** Destino SSH (`host` ou `usuario@host`): o servidor abre o túnel sozinho. */
+  ssh?: string;
+  /** Porta do agent-office na outra máquina. */
+  remotePort: number;
+  /** Alternativa ao SSH: endereço local de um túnel que você mesmo mantém. */
+  url?: string;
+}
+
+const PEER_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,39}$/;
+/** `host` ou `usuario@host`; nunca começa com "-" (seria lido pelo ssh como opção). */
+const SSH_TARGET = /^[A-Za-z0-9_][A-Za-z0-9_.@-]{0,127}$/;
+
+export function isLoopbackUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return (u.protocol === 'http:' || u.protocol === 'ws:') && ['127.0.0.1', 'localhost', '[::1]'].includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Valida uma entrada de `peers`; devolve null se não for utilizável. */
+export function parsePeer(raw: unknown): PeerConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const name = typeof o.name === 'string' ? o.name.trim() : '';
+  if (!PEER_NAME.test(name)) return null;
+  const ssh = typeof o.ssh === 'string' && SSH_TARGET.test(o.ssh) ? o.ssh : undefined;
+  const url = typeof o.url === 'string' && isLoopbackUrl(o.url) ? o.url : undefined;
+  if (!ssh && !url) return null;
+  return { name, remotePort: positive(o.remotePort) ?? DEFAULT_PORT, ...(ssh ? { ssh } : {}), ...(!ssh && url ? { url } : {}) };
+}
+
+/** Seção "peers": outros computadores cujas sessões este escritório espelha. */
+export function peersReader(home: string = officeHome()): () => PeerConfig[] {
+  const none: PeerConfig[] = [];
+  return valueReader(home, 'peers', none, (v) => {
+    if (!Array.isArray(v)) return none;
+    const seen = new Set<string>();
+    const peers: PeerConfig[] = [];
+    for (const item of v) {
+      const peer = parsePeer(item);
+      if (!peer || seen.has(peer.name)) continue;
+      seen.add(peer.name);
+      peers.push(peer);
+    }
+    return peers;
+  });
 }
 
 export const DEFAULT_CONFIG: OfficeConfig = {

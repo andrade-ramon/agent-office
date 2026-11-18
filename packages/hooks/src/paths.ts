@@ -93,6 +93,18 @@ export interface CloudSourceConfig {
   everySec?: number;
 }
 
+/** Outro computador cujo agent-office este escritório espelha. */
+export interface PeerEntry {
+  /** Nome exibido no escritório. */
+  name: string;
+  /** Destino SSH (`host` ou `usuario@host`): o servidor abre o túnel sozinho. */
+  ssh?: string;
+  /** Porta do agent-office na outra máquina. */
+  remotePort?: number;
+  /** Alternativa: endereço local de um túnel que você mesmo mantém. */
+  url?: string;
+}
+
 export interface OfficeConfig {
   port: number;
   idleAfterMin?: number;
@@ -101,6 +113,7 @@ export interface OfficeConfig {
   voiceAlert?: VoiceAlertConfig;
   codexCloud?: CloudSourceConfig;
   claudeCloud?: CloudSourceConfig;
+  peers?: PeerEntry[];
 }
 
 export function readConfig(paths: Paths): OfficeConfig {

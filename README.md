@@ -57,6 +57,7 @@ Abra **http://localhost:4747**.
 | `agent-office service install\|uninstall\|status\|restart` | Inicialização automática (launchd no macOS, `systemd --user` no Linux, Tarefa Agendada no Windows). |
 | `agent-office alert on --sound siren` | Liga o alerta sonoro: sirene, bipe ou seu nome em voz alta (veja abaixo). `off`, `test` e `status` completam. |
 | `agent-office cloud on` | Mostra também as sessões que rodam na nuvem do Codex e do Claude (veja abaixo). `off` e `status` completam. |
+| `agent-office peer add <nome> <host>` | Mostra também as sessões de outro computador seu que roda o agent-office (veja abaixo). `remove` e `status` completam. |
 | `agent-office doctor` | Diagnóstico completo, incluindo o teste de fail-open do hook. |
 | `agent-office fix-settings` | Corrige problemas conhecidos do `~/.claude/settings.json` que fazem o Claude Code ignorar o arquivo. |
 | `agent-office uninstall` | `disconnect` + remove o serviço. `--purge` apaga `~/.agent-office`. |
@@ -128,6 +129,26 @@ O servidor consulta a CLI de cada agente no intervalo configurado e transforma c
 - Sem id, cada sessão do Claude em nuvem é identificada pelo título: se o título mudar, ela entra de novo como outra sessão.
 - Uma sessão do Claude que **já estava** aguardando quando a consulta começou aparece com o balão de atenção, mas não toca o alerta (sem data, pode ser uma sessão antiga esquecida).
 - Estas consultas são a única parte do agent-office que faz uma requisição para fora da máquina: à sua própria conta, pela CLI oficial de cada agente. Por isso vêm desligadas.
+
+### Outras máquinas
+
+Se você usa mais de um computador, cada um roda o seu próprio agent-office, e o escritório principal pode **espelhar as sessões dos outros** — do Claude Code e do Codex, com o mesmo nível de detalhe das locais (ferramenta atual, subagentes, pedidos de permissão, alerta sonoro).
+
+1. **Na outra máquina**: instale o agent-office normalmente (`npm install`, `npm run build`, `agent-office connect`, `agent-office service install`).
+2. **Nesta máquina** (a principal): garanta o acesso por SSH sem senha à outra (`ssh usuario@host` precisa entrar direto, com chave) e cadastre:
+
+```bash
+agent-office peer add macbook-casa ramon@macbook-casa.local   # nome exibido + destino SSH (vale na hora)
+agent-office peer add servidor dev --port 4800                # se o agent-office de lá usa outra porta
+agent-office peer status
+agent-office peer remove macbook-casa
+```
+
+- O servidor abre sozinho um **túnel SSH** que liga uma porta local ao `127.0.0.1` da outra máquina e se conecta ao escritório de lá. Os dois servidores continuam escutando **somente em `127.0.0.1`**; os dados só trafegam entre os seus computadores, pela sua conexão SSH.
+- As sessões espelhadas aparecem com o nome da máquina (`@macbook-casa`) na lista e no painel. Elas se comportam como as locais, mas não dá para trazer a janela delas para a frente.
+- Se a conexão cai, as sessões daquela máquina saem do escritório e voltam quando o túnel reconecta (o servidor tenta de novo sozinho).
+- O `ssh` roda sem perguntas (`BatchMode`): se a chave ou a identidade do host ainda não foram aceitas, o túnel falha e o motivo aparece em `agent-office peer status`. Conecte uma vez manualmente (`ssh usuario@host`) para resolver.
+- Já tem um túnel próprio (outra ferramenta, outra porta)? Use `agent-office peer add <nome> --url http://127.0.0.1:<porta>`. Só endereços locais são aceitos.
 
 ### Modo demo
 
@@ -220,6 +241,7 @@ O script de hook (`~/.agent-office/bin/agent-office-hook`) é **fail-open**:
 - O watcher lê os transcripts localmente apenas para classificar cada linha (é um prompt? uma chamada de ferramenta?). Nenhum conteúdo é guardado, transmitido ao navegador ou gravado no SQLite.
 - O histórico (`~/.agent-office/agent-office.db`) guarda eventos e contagens por 30 dias. Nada mais.
 - O app instalado guarda no cache do navegador apenas os arquivos da interface (HTML, JS, CSS); `/api`, `/events` e `/ws` nunca passam pelo service worker.
+- Com `agent-office peer add`, este escritório lê as sessões do agent-office de outro computador seu por um túnel SSH (de `127.0.0.1` a `127.0.0.1`). Nada passa por terceiros, e tudo o que chega de lá é conferido campo a campo antes de ser exibido.
 - Não há telemetria, CDN nem fontes remotas. A única requisição para fora é opcional e vem desligada: com `agent-office cloud on`, o servidor consulta as sessões em nuvem da sua conta pela CLI do Codex e do Claude (título e estado; no Codex, também id, ambiente e contagem de linhas alteradas).
 
 ## Sobre os hooks de cada agente
