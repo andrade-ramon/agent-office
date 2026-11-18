@@ -4,7 +4,7 @@ Um escritório 2D em pixel art, animado e interativo, que mostra **em tempo real
 
 Tudo roda **somente em `127.0.0.1`**. Nada sai da sua máquina.
 
-![O escritório no modo demo, com a legenda dos espaços e o painel de detalhes de um agente](docs/demo.gif)
+![O escritório no modo demo: a legenda dos espaços, o painel de detalhes de um agente e o telão do painel de dados](docs/demo.gif)
 
 ```
 ┌──────────────┐  hooks (POST /events)   ┌───────────────────────┐  WebSocket   ┌──────────────┐
@@ -150,6 +150,29 @@ agent-office peer remove macbook-casa
 - O `ssh` roda sem perguntas (`BatchMode`): se a chave ou a identidade do host ainda não foram aceitas, o túnel falha e o motivo aparece em `agent-office peer status`. Conecte uma vez manualmente (`ssh usuario@host`) para resolver.
 - Já tem um túnel próprio (outra ferramenta, outra porta)? Use `agent-office peer add <nome> --url http://127.0.0.1:<porta>`. Só endereços locais são aceitos.
 
+### Painel de dados
+
+Na ala de baixo do escritório há um telão com o **acumulado de todas as sessões** desta máquina. Ele faz parte do mapa, é atualizado ao vivo (os números sobem enquanto os agentes trabalham) e continua aceso no modo noite. Clique nele, use o botão **Painel** ou a tecla `P` para aproximar a câmera; `0` volta ao escritório inteiro.
+
+| No telão | O que é |
+|---|---|
+| **Tokens** | soma de todas as sessões, com a composição: entrada, saída, cache lido e cache gravado (o cache lido costuma ser quase tudo) |
+| **Prompts** | quantas mensagens você enviou aos agentes |
+| **Tempo ativo** | tempo em que as sessões estiveram trabalhando, somado entre elas (duas sessões em paralelo por uma hora = duas horas) |
+| **Sessões** | sessões principais, com os subagentes contados à parte |
+| **Ferramentas** | chamadas de ferramenta |
+
+Cada indicador mostra também **hoje** e os **últimos 7 dias**. Embaixo ficam o gráfico dos últimos 14 dias (Claude e Codex) e um quadro que se reveza entre modelos e projetos que mais consumiram, ferramentas por tipo, agentes, subagentes e o dia recorde.
+
+Como é calculado:
+
+- Os números vêm dos transcripts locais (`~/.claude/projects`, `~/.codex/sessions` e `~/.codex/archived_sessions`), não dos hooks. Na primeira vez o servidor lê **todo o histórico que ainda existe no disco** (alguns segundos; o telão mostra o progresso). Depois lê só o que cada arquivo cresceu, e o que já foi somado continua valendo mesmo que o agente apague transcripts antigos.
+- Nada é contado duas vezes: retomar ou bifurcar uma sessão copia o histórico para um arquivo novo, e cada linha e cada resposta do modelo entram na soma uma vez só.
+- **Tempo ativo** vai do seu prompt até o fim do turno. Um intervalo sem eventos conta no máximo 5 minutos (o mesmo prazo em que o personagem vira "ocioso"), para não somar permissões esquecidas nem o computador dormindo.
+- Ficam de fora as sessões na nuvem e as de outras máquinas: delas não há transcript aqui.
+
+Os mesmos números estão em `GET /api/usage`.
+
 ### Modo demo
 
 Para ver o escritório funcionando sem nenhum agente real:
@@ -158,7 +181,7 @@ Para ver o escritório funcionando sem nenhum agente real:
 npm run demo      # compila e abre http://localhost:4748 com sessões simuladas
 ```
 
-O demo usa outra porta (4748), não lê seus transcripts e não grava histórico.
+O demo usa outra porta (4748), não lê seus transcripts e não grava histórico; os números do painel de dados são inventados.
 
 ### Na interface
 
@@ -167,6 +190,7 @@ O demo usa outra porta (4748), não lê seus transcripts e não grava histórico
 - **Painéis redimensionáveis**: arraste a borda da lista de sessões ou do painel de detalhes para ajustar a largura (duplo clique na borda volta ao padrão; a largura fica salva).
 - **Duplo clique**: tenta trazer o terminal/app daquela sessão para frente (quando o sistema permite).
 - **Arrastar** move a câmera, **roda do mouse** dá zoom, **Focar** segue o personagem selecionado.
+- **Painel** (ou `P`, ou um clique no telão) aproxima a câmera do [painel de dados](#painel-de-dados).
 - Filtros por agente e por projeto, lista lateral de sessões, modo compacto e tela cheia.
 - Quem está **aguardando você** (pergunta ou pedido de permissão) ganha balão, anel pulsante, destaque na lista e contador no título da aba. Notificações de desktop são opcionais.
 
@@ -182,6 +206,7 @@ O demo usa outra porta (4748), não lê seus transcripts e não grava histórico
 | Sala de reunião | subagentes e o agente que os delegou |
 | Bancada da nuvem | sessões do Codex e do Claude que rodam na nuvem (com `agent-office cloud on`) |
 | Copa | sessão ociosa (`idle`) |
+| Painel de dados | o telão com o acumulado; quem está ocioso por perto para para olhar |
 | Porta | sessões chegando e saindo |
 
 ## Como funciona
@@ -240,6 +265,7 @@ O script de hook (`~/.agent-office/bin/agent-office-hook`) é **fail-open**:
 - **Assunto da sessão**: a única informação derivada do conteúdo é o título curto (até 90 caracteres) que o próprio agente dá à sessão — o mesmo que aparece na barra lateral do Claude ou do Codex — e a descrição curta da tarefa de um subagente. Fica só na sua máquina, em memória (não vai para o SQLite). Para não exibir nem isso, use `"titles": false` em `~/.agent-office/config.json` e reinicie o servidor.
 - O watcher lê os transcripts localmente apenas para classificar cada linha (é um prompt? uma chamada de ferramenta?). Nenhum conteúdo é guardado, transmitido ao navegador ou gravado no SQLite.
 - O histórico (`~/.agent-office/agent-office.db`) guarda eventos e contagens por 30 dias. Nada mais.
+- O painel de dados lê os mesmos transcripts, também só na sua máquina, e guarda no mesmo arquivo apenas **somas por dia** (tokens, prompts, ferramentas, tempo ativo), separadas por agente, modelo e nome do projeto (a última pasta do diretório). Para não contar duas vezes, guarda por 60 dias um hash dos identificadores das linhas já somadas — nunca o conteúdo. As somas não expiram.
 - O app instalado guarda no cache do navegador apenas os arquivos da interface (HTML, JS, CSS); `/api`, `/events` e `/ws` nunca passam pelo service worker.
 - Com `agent-office peer add`, este escritório lê as sessões do agent-office de outro computador seu por um túnel SSH (de `127.0.0.1` a `127.0.0.1`). Nada passa por terceiros, e tudo o que chega de lá é conferido campo a campo antes de ser exibido.
 - Não há telemetria, CDN nem fontes remotas. A única requisição para fora é opcional e vem desligada: com `agent-office cloud on`, o servidor consulta as sessões em nuvem da sua conta pela CLI do Codex e do Claude (título e estado; no Codex, também id, ambiente e contagem de linhas alteradas).
